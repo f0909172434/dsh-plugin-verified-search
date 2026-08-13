@@ -73,10 +73,55 @@ describe('response mapping', () => {
     expect(mapped.snippet!.length).toBe(8_000)
     expect(mapped.publishedAt!.length).toBe(200)
   })
+
+  it('tolerates null and malformed optional metadata from the live provider', () => {
+    expect(mapResponse({
+      content: [
+        { type: 'text', citations: [null, { url: null, cited_text: null }, { url: 42, cited_text: {} }] },
+        {
+          type: 'web_search_tool_result',
+          content: [
+            null,
+            { type: 'web_search_result', url: 'https://deepseek.com/nulls', title: null, page_age: null },
+          ],
+        },
+      ],
+    })).toEqual([{ url: 'https://deepseek.com/nulls' }])
+  })
+
+  it('rejects null result content with a controlled provider error', () => {
+    expect(() => mapResponse({ content: [{ type: 'web_search_tool_result', content: null }] }))
+      .toThrow(VerifiedSearchError)
+  })
+
+  it('fails closed on malformed result URLs and structured tool errors', () => {
+    for (const url of [null, 42, ['https://deepseek.com/coerced']]) {
+      expect(() => mapResponse({
+        content: [{ type: 'web_search_tool_result', content: [{ type: 'web_search_result', url }] }],
+      })).toThrow(/URL string/u)
+    }
+    expect(() => mapResponse({
+      content: [{
+        type: 'web_search_tool_result',
+        content: { type: 'web_search_tool_result_error', error_code: 'max_uses_exceeded' },
+      }],
+    })).toThrow(/max_uses_exceeded/u)
+    expect(() => mapResponse({
+      content: [{
+        type: 'web_search_tool_result',
+        content: { type: 'web_search_tool_result_error', error_code: 'provider-secret-detail' },
+      }],
+    })).toThrow(/malformed_result/u)
+  })
+
+  it('rejects a non-object or malformed outer response', () => {
+    expect(() => mapResponse(null)).toThrow(VerifiedSearchError)
+    expect(() => mapResponse({ content: {} })).toThrow(/no web_search_tool_result/u)
+  })
 })
 
 describe('wire request', () => {
-  it('builds a secret-free HTTP(S) Messages endpoint and rejects unsafe base URLs', () => {
+  it('builds a credential-free HTTP(S) Messages endpoint and rejects unsafe base URLs', () => {
     expect(messagesEndpoint('https://api.deepseek.test/anthropic/v1/'))
       .toBe('https://api.deepseek.test/anthropic/v1/messages')
     expect(messagesEndpoint('http://127.0.0.1:8080/anthropic/v1'))
@@ -93,7 +138,7 @@ describe('wire request', () => {
     }
   })
 
-  it('records the exact secret-free request before dispatch and maps results', async () => {
+  it('records the exact credential-free request before dispatch and maps results', async () => {
     const recordRequest = vi.fn()
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload()), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -109,6 +154,32 @@ describe('wire request', () => {
     expect(recordRequest).toHaveBeenCalledWith({ endpoint, apiVersion: '2023-06-01', body })
     expect(recordRequest.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0] ?? 0)
     expect(result.sources).toHaveLength(1)
+  })
+
+  it('accepts null page_age through the complete HTTP response path', async () => {
+    const response = {
+      content: [
+        { type: 'text', citations: [{ url: 'https://deepseek.com/current', cited_text: 'current official excerpt' }] },
+        {
+          type: 'web_search_tool_result',
+          content: [{
+            type: 'web_search_result',
+            url: 'https://deepseek.com/current',
+            title: 'Current model',
+            page_age: null,
+          }],
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(response), { status: 200 })))
+    await expect(search({ query: 'q' }, options())).resolves.toEqual({
+      sources: [{
+        url: 'https://deepseek.com/current',
+        title: 'Current model',
+        snippet: 'current official excerpt',
+      }],
+      truncated: false,
+    })
   })
 
   it('does not dispatch when durable request logging fails', async () => {

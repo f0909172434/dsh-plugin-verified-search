@@ -22,7 +22,7 @@ This project is the immediately installable companion to [deepseek-harness Discu
 Install the reviewed release tag:
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.0
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
 dsh --profile web --dump-config
 dsh web
 ```

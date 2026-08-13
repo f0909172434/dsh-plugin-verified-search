@@ -8,32 +8,28 @@ import type {
 } from './types.js'
 
 interface Citation {
-  readonly url?: string
-  readonly cited_text?: string
+  readonly url?: unknown
+  readonly cited_text?: unknown
 }
 
 interface TextBlock {
   readonly type: 'text'
-  readonly citations?: readonly Citation[]
+  readonly citations?: unknown
 }
 
 interface ResultItem {
   readonly type: string
-  readonly url?: string
-  readonly title?: string
-  readonly page_age?: string
+  readonly url?: unknown
+  readonly title?: unknown
+  readonly page_age?: unknown
 }
 
 interface ResultBlock {
   readonly type: 'web_search_tool_result'
-  readonly content?: readonly ResultItem[]
+  readonly content?: unknown
 }
 
-type ResponseBlock = TextBlock | ResultBlock | { readonly type: string }
-
-interface AnthropicResponse {
-  readonly content?: readonly ResponseBlock[]
-}
+type ResponseBlock = TextBlock | ResultBlock | { readonly type?: unknown }
 
 const TRACKING_QUERY_NAME = /^(?:fbclid|gclid|msclkid|utm_.+)$/iu
 const SENSITIVE_QUERY_NAMES = new Set([
@@ -66,6 +62,14 @@ const MAX_TITLE_LENGTH = 1000
 const MAX_SNIPPET_LENGTH = 8000
 const MAX_PAGE_AGE_LENGTH = 200
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+const WEB_SEARCH_ERROR_CODES = new Set([
+  'invalid_tool_input',
+  'unavailable',
+  'max_uses_exceeded',
+  'too_many_requests',
+  'query_too_long',
+  'request_too_large',
+])
 
 export class VerifiedSearchError extends Error {
   constructor(message: string, readonly code: string, options?: ErrorOptions) {
@@ -114,16 +118,22 @@ export function sanitizeSourceUrl(sourceUrl: string): string {
   return result
 }
 
-function boundedText(value: string | undefined, maxLength: number): string | undefined {
-  if (value === undefined) return undefined
+function boundedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined
   const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
   if (normalized.length === 0) return undefined
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`
 }
 
 /** Map result blocks and citation excerpts without trusting provider prose. */
-export function mapResponse(response: AnthropicResponse): VerifiedSearchSource[] {
-  const blocks = response.content ?? []
+export function mapResponse(response: unknown): VerifiedSearchSource[] {
+  if (typeof response !== 'object' || response === null) {
+    throw new VerifiedSearchError('DeepSeek returned a non-object response', 'VERIFIED_SEARCH_PROVIDER_ERROR')
+  }
+  const rawContent = (response as { readonly content?: unknown }).content
+  const blocks = Array.isArray(rawContent)
+    ? rawContent.filter((block): block is ResponseBlock => typeof block === 'object' && block !== null)
+    : []
   const resultBlocks = blocks.filter((block): block is ResultBlock => block.type === 'web_search_tool_result')
   if (resultBlocks.length === 0) {
     throw new VerifiedSearchError(
@@ -134,8 +144,13 @@ export function mapResponse(response: AnthropicResponse): VerifiedSearchSource[]
   const snippets = new Map<string, string>()
   for (const block of blocks) {
     if (block.type !== 'text') continue
-    for (const citation of (block as TextBlock).citations ?? []) {
-      if (citation.url && citation.cited_text && !snippets.has(citation.url)) {
+    const rawCitations = (block as TextBlock).citations
+    const citations = Array.isArray(rawCitations)
+      ? rawCitations.filter((citation: unknown): citation is Citation => typeof citation === 'object' && citation !== null)
+      : []
+    for (const citation of citations) {
+      if (typeof citation.url === 'string' && typeof citation.cited_text === 'string'
+        && citation.url.length > 0 && citation.cited_text.length > 0 && !snippets.has(citation.url)) {
         snippets.set(citation.url, citation.cited_text)
       }
     }
@@ -143,8 +158,21 @@ export function mapResponse(response: AnthropicResponse): VerifiedSearchSource[]
   const seen = new Set<string>()
   const sources: VerifiedSearchSource[] = []
   for (const block of resultBlocks) {
-    for (const item of block.content ?? []) {
-      if (item.type !== 'web_search_result' || !item.url) continue
+    if (!Array.isArray(block.content)) {
+      const rawErrorCode = typeof block.content === 'object' && block.content !== null
+        && (block.content as { readonly type?: unknown }).type === 'web_search_tool_result_error'
+        && typeof (block.content as { readonly error_code?: unknown }).error_code === 'string'
+        ? (block.content as { readonly error_code: string }).error_code
+        : 'malformed_result'
+      const errorCode = WEB_SEARCH_ERROR_CODES.has(rawErrorCode) ? rawErrorCode : 'malformed_result'
+      throw new VerifiedSearchError(`DeepSeek web search failed (${errorCode})`, 'VERIFIED_SEARCH_PROVIDER_ERROR')
+    }
+    const items = block.content.filter((item): item is ResultItem => typeof item === 'object' && item !== null)
+    for (const item of items) {
+      if (item.type !== 'web_search_result') continue
+      if (typeof item.url !== 'string' || item.url.length === 0) {
+        throw new VerifiedSearchError('DeepSeek returned a search result without a valid URL string', 'VERIFIED_SEARCH_PROVIDER_ERROR')
+      }
       const sourceUrl = sanitizeSourceUrl(item.url)
       if (seen.has(sourceUrl)) continue
       seen.add(sourceUrl)
@@ -196,7 +224,7 @@ async function abortable<T>(operation: Promise<T>, signal?: AbortSignal): Promis
   })
 }
 
-/** Resolve and validate the secret-free Messages endpoint before logging it. */
+/** Resolve and validate the credential-free Messages endpoint before logging it. */
 export function messagesEndpoint(baseURL: string): string {
   if (baseURL.length === 0 || baseURL !== baseURL.trim()) {
     throw new VerifiedSearchError('DeepSeek baseURL must be a non-empty URL without surrounding whitespace', 'VERIFIED_SEARCH_INVALID_CONFIG')
@@ -320,7 +348,7 @@ export async function search(
         'anthropic-version': options.apiVersion,
         'content-type': 'application/json',
         'accept': 'application/json',
-        'user-agent': 'dsh-plugin-verified-search/0.1.0',
+        'user-agent': 'dsh-plugin-verified-search/0.1.1',
       },
       body: JSON.stringify(body),
       ...(signal === undefined ? {} : { signal }),
@@ -337,7 +365,7 @@ export async function search(
   let sources: VerifiedSearchSource[]
   try {
     const raw = await responseTextWithin(response, MAX_RESPONSE_BYTES)
-    sources = mapResponse(JSON.parse(raw) as AnthropicResponse)
+    sources = mapResponse(JSON.parse(raw))
   } catch (error: unknown) {
     if (error instanceof VerifiedSearchError) throw error
     if (signal?.aborted === true || isAbort(error)) {

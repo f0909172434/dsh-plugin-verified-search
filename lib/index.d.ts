@@ -64,37 +64,13 @@ declare function normalizeAllowedDomains(values: readonly string[] | undefined):
 declare function enforceAllowedSources(urls: readonly string[], allowedDomains: readonly string[] | undefined): void;
 //#endregion
 //#region src/provider.d.ts
-interface Citation {
-  readonly url?: string;
-  readonly cited_text?: string;
-}
-interface TextBlock {
-  readonly type: 'text';
-  readonly citations?: readonly Citation[];
-}
-interface ResultItem {
-  readonly type: string;
-  readonly url?: string;
-  readonly title?: string;
-  readonly page_age?: string;
-}
-interface ResultBlock {
-  readonly type: 'web_search_tool_result';
-  readonly content?: readonly ResultItem[];
-}
-type ResponseBlock = TextBlock | ResultBlock | {
-  readonly type: string;
-};
-interface AnthropicResponse {
-  readonly content?: readonly ResponseBlock[];
-}
 declare class VerifiedSearchError extends Error {
   readonly code: string;
   constructor(message: string, code: string, options?: ErrorOptions);
 }
 declare function searchInstruction(query: string): string;
 /** Map result blocks and citation excerpts without trusting provider prose. */
-declare function mapResponse(response: AnthropicResponse): VerifiedSearchSource[];
+declare function mapResponse(response: unknown): VerifiedSearchSource[];
 /** Execute one independently logged DeepSeek native-search turn. */
 declare function search(request: VerifiedSearchRequest, options: SearchOptions, signal?: AbortSignal): Promise<VerifiedSearchResult>;
 //#endregion
