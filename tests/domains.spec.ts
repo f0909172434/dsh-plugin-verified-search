@@ -43,6 +43,7 @@ describe('source postcondition', () => {
     expect(sourceMatchesDomain('https://deepseek.com/news', 'deepseek.com')).toBe(true)
     expect(sourceMatchesDomain('https://api.deepseek.com/news', 'deepseek.com')).toBe(true)
     expect(sourceMatchesDomain('https://notdeepseek.com', 'deepseek.com')).toBe(false)
+    expect(sourceMatchesDomain('https://user:secret@deepseek.com', 'deepseek.com')).toBe(false)
     expect(sourceMatchesDomain('file:///etc/passwd', 'deepseek.com')).toBe(false)
   })
 

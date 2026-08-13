@@ -1,3 +1,12 @@
 - insert:
+    # rc.6 ships this package but omits it from the default composition. This
+    # reproduces Discussion #344 without forking Harness. Deployments that
+    # already mounted #344 can set the switch to any non-empty value.
+    - id: verified-search-time-context
+      name: '@deepseek-ai/dsh-time-context'
+      disabled: !!js Boolean(process.env.DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT)
+      config:
+        refreshIntervalMs: 60000
+
     - id: verified-search
       name: dsh-plugin-verified-search

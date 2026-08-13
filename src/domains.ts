@@ -52,6 +52,7 @@ export function sourceMatchesDomain(sourceUrl: string, domain: string): boolean 
     return false
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  if (url.username.length > 0 || url.password.length > 0) return false
   const sourceHost = url.hostname.toLowerCase()
   return sourceHost === domain || sourceHost.endsWith(`.${domain}`)
 }

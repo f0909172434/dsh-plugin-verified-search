@@ -3,7 +3,7 @@ import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type { SearchOptions, VerifiedSearchWireRequest } from './types.js'
@@ -14,11 +14,20 @@ export { mapResponse, search, searchInstruction, VerifiedSearchError } from './p
 export { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from './tool.js'
 export type { SearchOptions, VerifiedSearchRequest, VerifiedSearchResult, VerifiedSearchSource, VerifiedSearchWireRequest } from './types.js'
 
-declare module '@deepseek-ai/dsh-session/types' {
-  interface SessionEventMap {
-    /** Exact secret-free request recorded before the auxiliary model dispatch. */
-    'verified-search/request': VerifiedSearchWireRequest
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** A blank live agent switched to a different standing preset. */
+    'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void
   }
+}
+
+/** Append the rc.6 persistence-known DeepSeek native-search protocol event. */
+function recordSearchRequest(session: Session, request: VerifiedSearchWireRequest): void {
+  // The event is declared by the built-in search package rather than the core
+  // session package. Avoid publishing a competing module augmentation from an
+  // out-of-tree plugin; the release test pins the runtime known-event registry.
+  const append = session.append.bind(session) as (type: string, data: unknown) => unknown
+  append('web/deepseek-search-llm-request', request)
 }
 
 export const name = 'verified-search'
@@ -39,7 +48,7 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  apiKeyEnv: z.string().default('DEEPSEEK_API_KEY'),
+  apiKeyEnv: z.string().role('credential-ref').default('DEEPSEEK_API_KEY'),
   apiKey: z.string().role('secret'),
   baseURL: z.string().default('https://api.deepseek.com/anthropic/v1'),
   model: z.string().default('deepseek-v4-flash'),
@@ -101,42 +110,64 @@ export function apply(ctx: Context, input: Config): void {
     recordRequest: request => {
       const agent = agentCtx.agent
       if (agent === undefined) throw new Error('verified-search: no agent session available for request logging')
-      agent.session.append('verified-search/request', request)
+      recordSearchRequest(agent.session, request)
     },
   })
 
-  const installed = new Map<object, () => void>()
-  const install = (agent: Agent): void => {
-    if (installed.has(agent)) return
-    const disposers: Array<() => void> = []
-    try {
-      if (agent.ctx.tools.get('web_search', agent) !== undefined) {
+  ctx.effect(() => {
+    const installed = new Map<Agent, () => void>()
+    const hostDisposers: Array<() => void> = []
+    const uninstall = (agent: Agent): void => {
+      installed.get(agent)?.()
+      installed.delete(agent)
+    }
+    const install = (agent: Agent): void => {
+      if (installed.has(agent)) return
+      // This is a replacement, not a capability grant. Presets such as
+      // `minimal` intentionally expose no search tool and remain unchanged.
+      if (agent.ctx.tools.get('web_search', agent) === undefined) return
+      const disposers: Array<() => void> = []
+      try {
+        // The preset is an ancestor scope, so this agent-level filter hides its
+        // inherited legacy tool while preserving this agent's verified_search.
         disposers.push(agent.ctx.tools.restrict({ deny: ['web_search'] }))
+        disposers.push(installForAgent(agent.ctx, () => optionsFor(agent.ctx), config.searchTimeoutMs))
+      } catch (error: unknown) {
+        for (const dispose of disposers.toReversed()) dispose()
+        throw error
       }
-      disposers.push(installForAgent(agent.ctx, () => optionsFor(agent.ctx), config.searchTimeoutMs))
+      installed.set(agent, () => {
+        for (const dispose of disposers.toReversed()) dispose()
+      })
+    }
+    const cleanup = (): void => {
+      for (const dispose of hostDisposers.toReversed()) dispose()
+      for (const dispose of [...installed.values()].toReversed()) dispose()
+      installed.clear()
+    }
+
+    try {
+      hostDisposers.push(ctx.on('agent/created', ({ agent }) => install(agent)))
+      hostDisposers.push(ctx.on('agent/disposed', ({ agent }) => {
+        // Registry removal does not guarantee that a custom agent's scope has
+        // unwound. Dispose our restriction, tool, and policy while the exact
+        // agent identity is still available.
+        uninstall(agent)
+      }))
+      hostDisposers.push(ctx.on('agent-preset/selected', (sessionId) => {
+        const agent = ctx.agents.get(sessionId)
+        if (agent === undefined) return
+        // An empty session may switch between a search-capable preset and a
+        // deliberately search-free one. Reconcile against the new parent view.
+        uninstall(agent)
+        install(agent)
+      }))
+      // Support a profile hot-reload while agents are already live.
+      for (const agent of ctx.agents.list()) install(agent)
     } catch (error: unknown) {
-      for (const dispose of disposers.toReversed()) dispose()
+      cleanup()
       throw error
     }
-    installed.set(agent, () => {
-      for (const dispose of disposers.toReversed()) dispose()
-    })
-  }
-
-  ctx.on('agent/created', ({ agent }) => {
-    // The preset is an ancestor scope, so this agent-level filter hides its
-    // inherited legacy tool while preserving this agent's verified_search.
-    install(agent)
-  })
-  ctx.on('agent/disposed', ({ agent }) => {
-    // The agent scope already unwound its registrations before this event.
-    installed.delete(agent)
-  })
-
-  // Support a profile hot-reload while agents are already live.
-  for (const agent of ctx.agents.list()) install(agent)
-  ctx.effect(() => () => {
-    for (const dispose of [...installed.values()].toReversed()) dispose()
-    installed.clear()
+    return cleanup
   }, 'verified-search.agents()')
 }

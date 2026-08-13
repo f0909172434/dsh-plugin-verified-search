@@ -1,5 +1,6 @@
 import z from "@deepseek-ai/schemastery";
 import { Context } from "@deepseek-ai/cordis";
+import { SessionId } from "@deepseek-ai/dsh-session";
 //#region src/types.d.ts
 interface VerifiedSearchRequest {
   readonly query: string;
@@ -103,10 +104,10 @@ declare function createVerifiedSearchTool(options: () => SearchOptions, timeoutM
 declare function installVerifiedSearchPolicy(ctx: Context): () => void;
 //#endregion
 //#region src/index.d.ts
-declare module '@deepseek-ai/dsh-session/types' {
-  interface SessionEventMap {
-    /** Exact secret-free request recorded before the auxiliary model dispatch. */
-    'verified-search/request': VerifiedSearchWireRequest;
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** A blank live agent switched to a different standing preset. */
+    'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void;
   }
 }
 declare const name = "verified-search";

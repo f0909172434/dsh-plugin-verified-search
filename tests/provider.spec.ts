@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mapResponse, search, searchInstruction, VerifiedSearchError } from '../src/provider.js'
+import { mapResponse, messagesEndpoint, sanitizeSourceUrl, search, searchInstruction, VerifiedSearchError } from '../src/provider.js'
 import type { SearchOptions } from '../src/types.js'
 
 const options = (overrides: Partial<SearchOptions> = {}): SearchOptions => ({
@@ -42,9 +42,57 @@ describe('response mapping', () => {
   it('fails when native search did not return a result block', () => {
     expect(() => mapResponse({ content: [{ type: 'text' }] })).toThrow(VerifiedSearchError)
   })
+
+  it('removes sensitive/tracking URL material and rejects URL credentials', () => {
+    expect(sanitizeSourceUrl(
+      'https://deepseek.com/news?id=42&utm_source=x&token=secret&authToken=a&jwt=b&ticket=c&X-Amz-Signature=d&X-Goog-Credential=e&Key-Pair-Id=f#section',
+    ))
+      .toBe('https://deepseek.com/news?id=42')
+    expect(() => sanitizeSourceUrl('https://user:secret@deepseek.com/news'))
+      .toThrow(VerifiedSearchError)
+  })
+
+  it('bounds and normalizes provider-controlled source text', () => {
+    const mapped = mapResponse({
+      content: [
+        { type: 'text', citations: [{ url: 'https://deepseek.com/x', cited_text: `line\n${'s'.repeat(9_000)}` }] },
+        {
+          type: 'web_search_tool_result',
+          content: [{
+            type: 'web_search_result',
+            url: 'https://deepseek.com/x',
+            title: `title\u0000${'t'.repeat(1_100)}`,
+            page_age: `date\n${'d'.repeat(300)}`,
+          }],
+        },
+      ],
+    })[0]!
+    expect(mapped.title).not.toContain('\u0000')
+    expect(mapped.title!.length).toBe(1_000)
+    expect(mapped.snippet).not.toContain('\n')
+    expect(mapped.snippet!.length).toBe(8_000)
+    expect(mapped.publishedAt!.length).toBe(200)
+  })
 })
 
 describe('wire request', () => {
+  it('builds a secret-free HTTP(S) Messages endpoint and rejects unsafe base URLs', () => {
+    expect(messagesEndpoint('https://api.deepseek.test/anthropic/v1/'))
+      .toBe('https://api.deepseek.test/anthropic/v1/messages')
+    expect(messagesEndpoint('http://127.0.0.1:8080/anthropic/v1'))
+      .toBe('http://127.0.0.1:8080/anthropic/v1/messages')
+    for (const value of [
+      'ftp://api.deepseek.test/v1',
+      'http://api.deepseek.test/v1',
+      'https://user:secret@api.deepseek.test/v1',
+      'https://api.deepseek.test/v1?token=secret',
+      'https://api.deepseek.test/v1#secret',
+      ' not-a-url',
+    ]) {
+      expect(() => messagesEndpoint(value)).toThrow(VerifiedSearchError)
+    }
+  })
+
   it('records the exact secret-free request before dispatch and maps results', async () => {
     const recordRequest = vi.fn()
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload()), { status: 200 }))
@@ -90,7 +138,7 @@ describe('wire request', () => {
     }
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(response), { status: 200 })))
     await expect(search({ query: 'q', allowedDomains: ['example.com'] }, options({ maxResults: 1 })))
-      .resolves.toEqual({ sources: [{ url: 'https://a.example.com' }], truncated: true })
+      .resolves.toEqual({ sources: [{ url: 'https://a.example.com/' }], truncated: true })
   })
 
   it('resolves credentials per call and handles HTTP errors', async () => {
@@ -99,7 +147,54 @@ describe('wire request', () => {
     const resolvedOptions = options({ resolveApiKey })
     delete (resolvedOptions as { apiKey?: string }).apiKey
     await expect(search({ query: 'q' }, resolvedOptions))
-      .rejects.toMatchObject({ code: 'VERIFIED_SEARCH_PROVIDER_ERROR', message: 'rate limited' })
+      .rejects.toMatchObject({ code: 'VERIFIED_SEARCH_PROVIDER_ERROR', message: 'DeepSeek API error (HTTP 429)' })
     expect(resolveApiKey).toHaveBeenCalledOnce()
+  })
+
+  it('cancels a hanging credential lookup without dispatching or logging', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn()
+    const recordRequest = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const hangingOptions = options({
+      resolveApiKey: () => new Promise<string>(() => {}),
+      recordRequest,
+    })
+    delete (hangingOptions as { apiKey?: string }).apiKey
+    const pending = search({ query: 'q' }, hangingOptions, controller.signal)
+    controller.abort(new Error('test cancellation'))
+    await expect(pending).rejects.toMatchObject({ code: 'VERIFIED_SEARCH_ABORTED' })
+    expect(recordRequest).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not echo credential-provider errors into the tool error', async () => {
+    const secret = 'live-secret-must-not-appear'
+    const failingOptions = options({
+      resolveApiKey: async () => { throw new Error(secret) },
+    })
+    delete (failingOptions as { apiKey?: string }).apiKey
+    await expect(search({ query: 'q' }, failingOptions)).rejects.toMatchObject({
+      code: 'VERIFIED_SEARCH_PROVIDER_ERROR',
+      message: 'credential resolution failed for "DEEPSEEK_API_KEY"',
+    })
+    try {
+      const secondFailure = options({
+        resolveApiKey: async () => { throw new Error(secret) },
+      })
+      delete (secondFailure as { apiKey?: string }).apiKey
+      await search({ query: 'q' }, secondFailure)
+    } catch (error: unknown) {
+      expect(String(error)).not.toContain(secret)
+    }
+  })
+
+  it('rejects oversized successful response bodies before parsing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', {
+      status: 200,
+      headers: { 'content-length': String(4 * 1024 * 1024 + 1) },
+    })))
+    await expect(search({ query: 'q' }, options()))
+      .rejects.toMatchObject({ code: 'VERIFIED_SEARCH_PROVIDER_ERROR', message: 'DeepSeek response exceeded the 4 MiB limit' })
   })
 })
