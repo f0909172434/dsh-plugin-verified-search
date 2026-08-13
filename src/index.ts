@@ -9,7 +9,13 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type { SearchOptions, VerifiedSearchWireRequest } from './types.js'
 import { createVerifiedSearchTool, installVerifiedSearchPolicy } from './tool.js'
 
-export { normalizeAllowedDomains, enforceAllowedSources, SearchFilterError, SearchFilterViolationError } from './domains.js'
+export {
+  normalizeAllowedDomains,
+  filterAllowedSources,
+  enforceAllowedSources,
+  SearchFilterError,
+  SearchFilterViolationError,
+} from './domains.js'
 export { mapResponse, search, searchInstruction, VerifiedSearchError } from './provider.js'
 export { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from './tool.js'
 export type { SearchOptions, VerifiedSearchRequest, VerifiedSearchResult, VerifiedSearchSource, VerifiedSearchWireRequest } from './types.js'

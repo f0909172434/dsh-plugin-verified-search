@@ -4,7 +4,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
-import { createVerifiedSearchTool, installVerifiedSearchPolicy } from '../src/tool.js'
+import { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from '../src/tool.js'
 
 async function fixture() {
   const ctx = new Context()
@@ -44,5 +44,26 @@ describe('agent-scoped policy', () => {
     expect(assembly.sections.find(section => section.name === 'tool:verified_search')?.text)
       .toContain('absolute date')
     await ctx.fiber.dispose()
+  })
+})
+
+describe('model-visible result warnings', () => {
+  it('reports out-of-scope removals without exposing a discarded URL', () => {
+    const text = formatResult({ sources: [], truncated: false, filteredOut: 2 })
+    expect(text).toContain('2 structured source(s)')
+    expect(text).toContain('none matched allowed_domains')
+    expect(text).toContain('unresolved')
+    expect(text).not.toContain('http')
+  })
+
+  it('reports mixed-source filtering after retained evidence', () => {
+    const text = formatResult({
+      sources: [{ url: 'https://api.deepseek.com/current', title: 'Current' }],
+      truncated: true,
+      filteredOut: 1,
+    })
+    expect(text).toContain('https://api.deepseek.com/current')
+    expect(text).toContain('removed 1 provider source(s)')
+    expect(text).toContain('source list was capped')
   })
 })

@@ -150,7 +150,11 @@ describe('wire request', () => {
     const body = JSON.parse(init.body as string)
     expect(endpoint).toBe('https://api.deepseek.test/anthropic/v1/messages')
     expect(body.tools[0].allowed_domains).toEqual(['deepseek.com'])
-    expect(body.messages[0].content[0].text).toBe(searchInstruction('DeepSeek current flagship as of 2026-08-14'))
+    expect(body.messages[0].content[0].text).toContain('["deepseek.com"]')
+    expect(body.messages[0].content[0].text).toBe(searchInstruction(
+      'DeepSeek current flagship as of 2026-08-14',
+      ['deepseek.com'],
+    ))
     expect(recordRequest).toHaveBeenCalledWith({ endpoint, apiVersion: '2023-06-01', body })
     expect(recordRequest.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0] ?? 0)
     expect(result.sources).toHaveLength(1)
@@ -179,6 +183,7 @@ describe('wire request', () => {
         snippet: 'current official excerpt',
       }],
       truncated: false,
+      filteredOut: 0,
     })
   })
 
@@ -191,17 +196,26 @@ describe('wire request', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('fails when a provider ignores allowed_domains', async () => {
+  it('removes every provider source outside allowed_domains', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(payload('https://evil.example')), { status: 200 })))
     await expect(search({ query: 'q', allowedDomains: ['deepseek.com'] }, options()))
-      .rejects.toMatchObject({ code: 'VERIFIED_SEARCH_FILTER_VIOLATION' })
+      .resolves.toEqual({ sources: [], truncated: false, filteredOut: 1 })
   })
 
-  it('caps results after the source postcondition', async () => {
+  it('keeps every structured source when no allowlist is requested', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(payload('https://independent.example')), { status: 200 })))
+    await expect(search({ query: 'q' }, options())).resolves.toMatchObject({
+      sources: [{ url: 'https://independent.example/' }],
+      filteredOut: 0,
+    })
+  })
+
+  it('filters provider sources before capping accepted results', async () => {
     const response = {
       content: [{
         type: 'web_search_tool_result',
         content: [
+          { type: 'web_search_result', url: 'https://evil.example' },
           { type: 'web_search_result', url: 'https://a.example.com' },
           { type: 'web_search_result', url: 'https://b.example.com' },
         ],
@@ -209,7 +223,7 @@ describe('wire request', () => {
     }
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(response), { status: 200 })))
     await expect(search({ query: 'q', allowedDomains: ['example.com'] }, options({ maxResults: 1 })))
-      .resolves.toEqual({ sources: [{ url: 'https://a.example.com/' }], truncated: true })
+      .resolves.toEqual({ sources: [{ url: 'https://a.example.com/' }], truncated: true, filteredOut: 1 })
   })
 
   it('resolves credentials per call and handles HTTP errors', async () => {

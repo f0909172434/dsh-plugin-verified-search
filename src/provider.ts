@@ -1,4 +1,4 @@
-import { enforceAllowedSources, normalizeAllowedDomains } from './domains.js'
+import { filterAllowedSources, normalizeAllowedDomains } from './domains.js'
 import type {
   SearchOptions,
   VerifiedSearchRequest,
@@ -84,9 +84,12 @@ function isSensitiveQueryName(name: string): boolean {
     || SENSITIVE_QUERY_SUFFIXES.some(suffix => compact === suffix || compact.endsWith(suffix))
 }
 
-export function searchInstruction(query: string): string {
+export function searchInstruction(query: string, allowedDomains?: readonly string[]): string {
   return [
     `Search the live web and answer this exact query: ${query}`,
+    ...(allowedDomains === undefined
+      ? []
+      : [`Use only sources on these domains or their subdomains: ${JSON.stringify(allowedDomains)}. Do not cite or summarize any other source; if none qualify, state the gap.`]),
     'When the query explicitly says "as of" a date, treat that date as the cutoff. Prefer current first-party or benchmark-owner evidence.',
     'For current, latest, or as-of version and benchmark comparisons, verify that every item is the current version for the requested date. Do not substitute an older version when the current one cannot be verified.',
     'After searching, answer the query and cite every factual claim so the response contains citation excerpts for the caller. State any unresolved gap explicitly.',
@@ -326,7 +329,7 @@ export async function search(
   const body: VerifiedSearchWireRequest['body'] = {
     model: options.model,
     max_tokens: options.maxTokens,
-    messages: [{ role: 'user', content: [{ type: 'text', text: searchInstruction(query) }] }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: searchInstruction(query, allowedDomains) }] }],
     tools: [{
       type: 'web_search_20250305',
       name: 'web_search',
@@ -373,7 +376,11 @@ export async function search(
     }
     throw new VerifiedSearchError(`DeepSeek returned an unprocessable response: ${String(error)}`, 'VERIFIED_SEARCH_PROVIDER_ERROR', { cause: error })
   }
-  enforceAllowedSources(sources.map(source => source.url), allowedDomains)
-  const truncated = sources.length > options.maxResults
-  return { sources: truncated ? sources.slice(0, options.maxResults) : sources, truncated }
+  const filtered = filterAllowedSources(sources, allowedDomains)
+  const truncated = filtered.sources.length > options.maxResults
+  return {
+    sources: truncated ? filtered.sources.slice(0, options.maxResults) : filtered.sources,
+    truncated,
+    filteredOut: filtered.filteredOut,
+  }
 }

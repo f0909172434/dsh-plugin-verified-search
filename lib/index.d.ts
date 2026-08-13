@@ -16,6 +16,8 @@ interface VerifiedSearchSource {
 interface VerifiedSearchResult {
   readonly sources: readonly VerifiedSearchSource[];
   readonly truncated: boolean;
+  /** Provider-returned structured sources removed by the local allowlist. */
+  readonly filteredOut: number;
 }
 interface VerifiedSearchWireRequest {
   readonly endpoint: string;
@@ -55,12 +57,20 @@ interface SearchOptions {
 declare class SearchFilterError extends Error {
   readonly code = "VERIFIED_SEARCH_INVALID_FILTER";
 }
+/** @deprecated Use filterAllowedSources for provider-compatible degradation. */
 declare class SearchFilterViolationError extends Error {
   readonly code = "VERIFIED_SEARCH_FILTER_VIOLATION";
 }
 /** Normalize the portable hostname-only allowlist. */
 declare function normalizeAllowedDomains(values: readonly string[] | undefined): readonly string[] | undefined;
-/** Fail the whole result if a provider ignores an allowlist. */
+/** Keep only structured sources that satisfy the portable allowlist. */
+declare function filterAllowedSources<T extends {
+  readonly url: string;
+}>(sources: readonly T[], allowedDomains: readonly string[] | undefined): {
+  readonly sources: readonly T[];
+  readonly filteredOut: number;
+};
+/** @deprecated Retained for v0.1.x API compatibility; new code should post-filter. */
 declare function enforceAllowedSources(urls: readonly string[], allowedDomains: readonly string[] | undefined): void;
 //#endregion
 //#region src/provider.d.ts
@@ -68,7 +78,7 @@ declare class VerifiedSearchError extends Error {
   readonly code: string;
   constructor(message: string, code: string, options?: ErrorOptions);
 }
-declare function searchInstruction(query: string): string;
+declare function searchInstruction(query: string, allowedDomains?: readonly string[]): string;
 /** Map result blocks and citation excerpts without trusting provider prose. */
 declare function mapResponse(response: unknown): VerifiedSearchSource[];
 /** Execute one independently logged DeepSeek native-search turn. */
@@ -106,5 +116,5 @@ declare const Config: z<Config>;
 declare function installForAgent(agentCtx: Context, options: () => SearchOptions, timeoutMs?: number): () => void;
 declare function apply(ctx: Context, input: Config): void;
 //#endregion
-export { Config, SearchFilterError, SearchFilterViolationError, type SearchOptions, VerifiedSearchError, type VerifiedSearchRequest, type VerifiedSearchResult, type VerifiedSearchSource, type VerifiedSearchWireRequest, apply, createVerifiedSearchTool, enforceAllowedSources, formatResult, inject, installForAgent, installVerifiedSearchPolicy, mapResponse, name, normalizeAllowedDomains, search, searchInstruction };
+export { Config, SearchFilterError, SearchFilterViolationError, type SearchOptions, VerifiedSearchError, type VerifiedSearchRequest, type VerifiedSearchResult, type VerifiedSearchSource, type VerifiedSearchWireRequest, apply, createVerifiedSearchTool, enforceAllowedSources, filterAllowedSources, formatResult, inject, installForAgent, installVerifiedSearchPolicy, mapResponse, name, normalizeAllowedDomains, search, searchInstruction };
 //# sourceMappingURL=index.d.ts.map

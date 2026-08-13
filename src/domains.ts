@@ -4,6 +4,7 @@ export class SearchFilterError extends Error {
   readonly code = 'VERIFIED_SEARCH_INVALID_FILTER'
 }
 
+/** @deprecated Use filterAllowedSources for provider-compatible degradation. */
 export class SearchFilterViolationError extends Error {
   readonly code = 'VERIFIED_SEARCH_FILTER_VIOLATION'
 }
@@ -57,7 +58,17 @@ export function sourceMatchesDomain(sourceUrl: string, domain: string): boolean 
   return sourceHost === domain || sourceHost.endsWith(`.${domain}`)
 }
 
-/** Fail the whole result if a provider ignores an allowlist. */
+/** Keep only structured sources that satisfy the portable allowlist. */
+export function filterAllowedSources<T extends { readonly url: string }>(
+  sources: readonly T[],
+  allowedDomains: readonly string[] | undefined,
+): { readonly sources: readonly T[]; readonly filteredOut: number } {
+  if (allowedDomains === undefined) return { sources, filteredOut: 0 }
+  const accepted = sources.filter(source => allowedDomains.some(domain => sourceMatchesDomain(source.url, domain)))
+  return { sources: accepted, filteredOut: sources.length - accepted.length }
+}
+
+/** @deprecated Retained for v0.1.x API compatibility; new code should post-filter. */
 export function enforceAllowedSources(
   urls: readonly string[],
   allowedDomains: readonly string[] | undefined,
@@ -65,6 +76,5 @@ export function enforceAllowedSources(
   if (allowedDomains === undefined) return
   const index = urls.findIndex(url => !allowedDomains.some(domain => sourceMatchesDomain(url, domain)))
   if (index === -1) return
-  // Do not echo a provider URL: returned query strings may contain secrets.
   throw new SearchFilterViolationError(`search provider returned source ${index + 1} outside allowed_domains`)
 }

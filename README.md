@@ -13,7 +13,7 @@ This project is the immediately installable companion to [deepseek-harness Discu
 - Calls DeepSeek's Anthropic-compatible Messages endpoint with native `web_search_20250305`.
 - Records the exact credential-free auxiliary request before dispatch using Harness's persistence-known `web/deepseek-search-llm-request` event. The search query itself is durable session data, so never put a secret in it.
 - Normalizes 1–20 bare ASCII hostnames and rejects schemes, paths, ports, wildcards, Unicode hostnames, and IP literals, including legacy IPv4 forms.
-- Requires every returned structured source URL to match `allowed_domains` before capping results.
+- Sends `allowed_domains` to DeepSeek, echoes it in the auxiliary prompt, and locally removes non-matching structured sources before capping results.
 - Rejects credential-bearing source URLs and removes sensitive/tracking query parameters plus fragments before results enter tool/session logs.
 - Joins citation excerpts to sources and exposes missing excerpts instead of treating a title or URL as verified content.
 
@@ -57,11 +57,12 @@ The plugin reuses `DEEPSEEK_API_KEY` from the Harness credential service or laun
 
 ## Guarantees and limits
 
-When `allowed_domains` is present, every returned structured source URL must use HTTP(S) and match an allowed hostname or subdomain. A violation fails the whole search and does not echo the offending URL into the error.
+When `allowed_domains` is present, every structured source returned by the plugin must use HTTP(S) and match an allowed hostname or subdomain. DeepSeek may still return out-of-scope candidates despite its native filter; Harness removes those sources locally, reports only the number removed, and never exposes their URL, title, or excerpt in the tool result. If no source remains, the claim stays unresolved.
 
 This does **not** prove that:
 
 - DeepSeek's internal candidate pool or generated prose used only allowed sources;
+- DeepSeek did not retrieve an out-of-scope page or follow a redirect outside the allowlist;
 - the upstream index contains the newest page;
 - the provider's ranking is temporally correct;
 - a provider-supplied `page_age` is an ISO publication date;

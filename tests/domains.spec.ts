@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  enforceAllowedSources,
+  filterAllowedSources,
   normalizeAllowedDomains,
   SearchFilterError,
-  SearchFilterViolationError,
   sourceMatchesDomain,
 } from '../src/domains.js'
 
@@ -47,16 +46,13 @@ describe('source postcondition', () => {
     expect(sourceMatchesDomain('file:///etc/passwd', 'deepseek.com')).toBe(false)
   })
 
-  it('fails loud without echoing a provider URL', () => {
-    const secretUrl = 'https://evil.example/path?token=secret-value'
-    let caught: unknown
-    try {
-      enforceAllowedSources([secretUrl], ['deepseek.com'])
-    } catch (error: unknown) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(SearchFilterViolationError)
-    expect(String(caught)).not.toContain(secretUrl)
-    expect(String(caught)).not.toContain('secret-value')
+  it('removes non-matching sources before they enter tool output', () => {
+    expect(filterAllowedSources([
+      { url: 'https://api.deepseek.com/current', title: 'allowed' },
+      { url: 'https://evil.example/path?token=secret-value', title: 'removed' },
+    ], ['deepseek.com'])).toEqual({
+      sources: [{ url: 'https://api.deepseek.com/current', title: 'allowed' }],
+      filteredOut: 1,
+    })
   })
 })

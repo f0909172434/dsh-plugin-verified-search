@@ -14,6 +14,8 @@ export interface VerifiedSearchSource {
 export interface VerifiedSearchResult {
   readonly sources: readonly VerifiedSearchSource[]
   readonly truncated: boolean
+  /** Provider-returned structured sources removed by the local allowlist. */
+  readonly filteredOut: number
 }
 
 export interface VerifiedSearchWireRequest {
