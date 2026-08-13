@@ -14,8 +14,7 @@
   "scripts": {
     "build": "tsdown",
     "check": "tsc --noEmit",
-    "test": "vitest run",
-    "prepare": "pnpm run build"
+    "test": "vitest run"
   },
   "keywords": [
     "deepseek",

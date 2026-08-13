@@ -25,14 +25,7 @@ dsh --profile web --dump-config
 dsh web
 ```
 
-Git dependencies run this repository's `prepare` build. pnpm may initially refuse that install. If it does, copy the exact package key from pnpm's message into `C:\Users\<you>\.dsh\profiles\web\pnpm-workspace.yaml`:
-
-```yaml
-allowBuilds:
-  dsh-plugin-verified-search: true
-```
-
-Then repeat the pinned install command. Granting `allowBuilds` permits package code to run during installation; review and pin the source first.
+The repository commits its reviewed `lib/` output and has no install-time build script. A pinned Git install therefore does not require `allowBuilds` or execute this package's development toolchain on the user's machine.
 
 Start a new Harness session after installation. Existing sessions may retain their previous assembled tool header.
 
