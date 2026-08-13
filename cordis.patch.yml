@@ -1,0 +1,3 @@
+- insert:
+    - id: verified-search
+      name: dsh-plugin-verified-search
