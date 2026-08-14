@@ -351,7 +351,7 @@ export async function search(
         'anthropic-version': options.apiVersion,
         'content-type': 'application/json',
         'accept': 'application/json',
-        'user-agent': 'dsh-plugin-verified-search/0.1.1',
+        'user-agent': 'dsh-plugin-verified-search/0.2.0-experiment.0',
       },
       body: JSON.stringify(body),
       ...(signal === undefined ? {} : { signal }),

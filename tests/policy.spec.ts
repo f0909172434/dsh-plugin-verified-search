@@ -5,6 +5,7 @@ import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from '../src/tool.js'
+import { createVerifiedResearchTool } from '../src/research.js'
 
 async function fixture() {
   const ctx = new Context()
@@ -20,7 +21,7 @@ async function fixture() {
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute() { return 'old' },
   }))
-  scope.ctx.tools.register(createVerifiedSearchTool(() => ({
+  const options = () => ({
     apiKey: 'key',
     apiKeyRef: 'DEEPSEEK_API_KEY',
     baseURL: 'https://invalid.example/v1',
@@ -30,19 +31,24 @@ async function fixture() {
     maxUses: 1,
     maxResults: 1,
     recordRequest: vi.fn(),
-  })))
+  })
+  scope.ctx.tools.register(createVerifiedSearchTool(options))
+  scope.ctx.tools.register(createVerifiedResearchTool(options))
   installVerifiedSearchPolicy(scope.ctx)
   return { ctx, scope }
 }
 
 describe('agent-scoped policy', () => {
-  it('removes old web_search from model schema and exposes verified_search', async () => {
+  it('removes old web_search and exposes narrow and composite verified tools', async () => {
     const { ctx, scope } = await fixture()
     const assembly = await ctx.systemPrompt.assemble({ scope: scopeOf(scope.ctx)! })
     expect(assembly.tools.map(tool => tool.name)).toContain('verified_search')
+    expect(assembly.tools.map(tool => tool.name)).toContain('verified_research')
     expect(assembly.tools.map(tool => tool.name)).not.toContain('web_search')
     expect(assembly.sections.find(section => section.name === 'tool:verified_search')?.text)
       .toContain('absolute date')
+    expect(assembly.sections.find(section => section.name === 'tool:verified_research')?.text)
+      .toContain('one lane per required company')
     await ctx.fiber.dispose()
   })
 })
