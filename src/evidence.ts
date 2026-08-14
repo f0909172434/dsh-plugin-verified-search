@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto'
 import type { VerifiedPageEvidence } from './types.js'
 import type { FetchedPage } from './page-fetch.js'
 
-const MAX_NORMALIZED_TEXT = 100_000
+const MAX_NORMALIZED_TEXT = 2 * 1024 * 1024
 const MAX_EXCERPT_LENGTH = 2_000
-const MAX_INPUT_CHARS = 1024 * 1024
+const MAX_INPUT_CHARS = 2 * 1024 * 1024
 const RAW_SUPPRESSED_HTML_TAGS = new Set(['iframe', 'script', 'style'])
 const TREE_SUPPRESSED_HTML_TAGS = new Set(['canvas', 'footer', 'form', 'nav', 'noscript', 'svg', 'template'])
 const BLOCK_HTML_TAGS = new Set([
@@ -23,9 +23,11 @@ const CJK_ANCHORS = ['旗艦', '识别码', '識別碼', '版本', '發布', '�
 
 export interface NormalizedPage {
   readonly url: string
+  readonly mediaType: FetchedPage['mediaType']
   readonly text: string
   readonly retrievedAt: string
   readonly contentSha256: string
+  readonly derivedFrom?: string
 }
 
 interface ParsedTag {
@@ -215,20 +217,22 @@ function htmlToInertText(raw: string): string {
 
 /** Convert a bounded fetched body into inert, normalized text. */
 export function normalizeFetchedPage(page: FetchedPage): NormalizedPage {
-  const decoded = page.mediaType === 'text/html'
+  const decoded = page.mediaType === 'text/html' || page.mediaType === 'application/xhtml+xml'
     ? htmlToInertText(page.body)
     : page.body.slice(0, MAX_INPUT_CHARS)
   const lines = decoded
     .replace(/\r\n?/gu, '\n')
     .split('\n')
-    .map(line => line.replace(/[\t\f\v ]+/gu, ' ').trim())
+    .map(line => line.replace(/[\p{White_Space}]+/gu, ' ').trim())
     .filter(line => line.length > 0)
   const text = lines.join('\n').slice(0, MAX_NORMALIZED_TEXT)
   return {
     url: page.url,
+    mediaType: page.mediaType,
     text,
     retrievedAt: page.retrievedAt,
     contentSha256: createHash('sha256').update(text, 'utf8').digest('hex'),
+    ...(page.derivedFrom === undefined ? {} : { derivedFrom: page.derivedFrom }),
   }
 }
 
@@ -285,12 +289,54 @@ function meetsQueryThreshold(
   return matched.length >= requiredHits && (anchors.size === 0 || matched.some(term => anchors.has(term)))
 }
 
+function requiresVersionValue(query: string): boolean {
+  return /(?:latest\s+(?:stable\s+)?(?:release\s+)?version|version\s+number|版本號|版本号)/iu.test(query)
+}
+
+function requiresCalendarDate(query: string): boolean {
+  return /(?:release\s+date|end[- ]of[- ](?:life|support)|security(?:-fix)?\s+(?:support\s+)?(?:until|date|end)|due\s+date|發布日期|发布日期|支援截止|支持截止)/iu.test(query)
+}
+
+function requiresLatestAssertion(query: string): boolean {
+  return /(?:\blatest\b|\bnewest\b|最新)/iu.test(query)
+}
+
+function containsVersionValue(value: string): boolean {
+  return /\bv?\d+\.\d+(?:\.\d+)?(?:[-+][a-z0-9.-]+)?\b/iu.test(value)
+}
+
+function containsCalendarDate(value: string): boolean {
+  return /\b(?:\d{4}-\d{2}(?:-\d{2})?|\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4})\b/iu.test(value)
+}
+
+function containsLatestValueWindow(paragraph: string, query: string): boolean {
+  if (!requiresLatestAssertion(query)) return true
+  const lines = paragraph.split('\n')
+  for (let index = 0; index < lines.length; index++) {
+    const window = `${lines[index] ?? ''}\n${lines[index + 1] ?? ''}`
+    if (!/(?:\blatest\b|\bnewest\b|最新)/iu.test(window)) continue
+    if (requiresVersionValue(query) && !containsVersionValue(window)) continue
+    if (requiresCalendarDate(query) && !containsCalendarDate(window)) continue
+    return true
+  }
+  return false
+}
+
+function meetsValueRequirements(paragraph: string, query: string): boolean {
+  return (!requiresVersionValue(query) || containsVersionValue(paragraph))
+    && (!requiresCalendarDate(query) || containsCalendarDate(paragraph))
+    && containsLatestValueWindow(paragraph, query)
+}
+
 /** Select one exact, contiguous query-relevant excerpt from normalized page text. */
 export function extractPageEvidence(page: NormalizedPage, query: string): VerifiedPageEvidence | undefined {
   if (page.text.length === 0) return undefined
   const { terms, anchors } = queryTerms(query)
   if (terms.length === 0) return undefined
   const requiredHits = Math.min(2, terms.length)
+  const identifierIntent = terms.some(term => ['flagship', 'id', 'identifier', 'version'].includes(term))
+  const normalizedQuery = query.toLowerCase().replace(/[\p{White_Space}]+/gu, ' ')
+  const sectionLabels = normalizedQuery.match(/\b(?:article|chapter|section)\s+[a-z0-9-]+\b/gu) ?? []
   const paragraphPattern = /[^\n]+/gu
   const lines = [...page.text.matchAll(paragraphPattern)].map(match => ({
     start: match.index,
@@ -302,12 +348,20 @@ export function extractPageEvidence(page: NormalizedPage, query: string): Verifi
     const end = lines[Math.min(lines.length - 1, lineIndex + 11)]!.end
     const paragraph = page.text.slice(start, end)
     const { lower, matched: matchedTerms } = matchingTerms(paragraph, terms)
-    if (matchedTerms.length < requiredHits) continue
+    const latestUrlAssertion = requiresLatestAssertion(query) && /(?:^|[\/_-])latest(?:[\/_-]|$)/iu.test(page.url)
+    if (matchedTerms.length < requiredHits
+      || (!latestUrlAssertion && !meetsValueRequirements(paragraph, query))
+      || (latestUrlAssertion
+        && ((!requiresVersionValue(query) || !containsVersionValue(paragraph))
+          || (!requiresCalendarDate(query) || !containsCalendarDate(paragraph))))) continue
     const anchorHits = matchedTerms.filter(term => anchors.has(term)).length
     if (anchors.size > 0 && anchorHits === 0) continue
     const localFirstHit = Math.min(...matchedTerms.map(term => lower.indexOf(term)).filter(index => index >= 0))
-    const modelLikeIds = lower.match(/\b(?=[a-z0-9.-]*\d)[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gu)?.length ?? 0
-    const score = modelLikeIds * 2_000_000 + anchorHits * 1_000_000
+    const modelLikeIds = identifierIntent
+      ? lower.match(/\b(?=[a-z0-9.-]*\d)[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gu)?.length ?? 0
+      : 0
+    const headingHit = sectionLabels.some(label => lower.startsWith(label))
+    const score = (headingHit ? 5_000_000 : 0) + modelLikeIds * 2_000_000 + anchorHits * 1_000_000
       + matchedTerms.length * 10_000 + Math.min(paragraph.length, 2_000)
     if (best === undefined || score > best.score) {
       best = { start, end: start + paragraph.length, score, firstHit: start + localFirstHit }
@@ -324,7 +378,12 @@ export function extractPageEvidence(page: NormalizedPage, query: string): Verifi
   while (start < end && /\s/u.test(page.text[start]!)) start++
   while (end > start && /\s/u.test(page.text[end - 1]!)) end--
   const excerpt = page.text.slice(start, end)
-  if (excerpt.length === 0 || !meetsQueryThreshold(excerpt, terms, anchors, requiredHits)) return undefined
+  if (excerpt.length === 0
+    || !meetsQueryThreshold(excerpt, terms, anchors, requiredHits)
+    || (!/(?:^|[\/_-])latest(?:[\/_-]|$)/iu.test(page.url) && !meetsValueRequirements(excerpt, query))
+    || (/(?:^|[\/_-])latest(?:[\/_-]|$)/iu.test(page.url)
+      && ((!requiresVersionValue(query) || !containsVersionValue(excerpt))
+        || (!requiresCalendarDate(query) || !containsCalendarDate(excerpt))))) return undefined
   return {
     finalUrl: page.url,
     excerpt,

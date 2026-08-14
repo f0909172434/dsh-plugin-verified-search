@@ -58,7 +58,7 @@ describe('DNS-pinned evidence fetch policy', () => {
       'https://docs.example.com/current?utm_source=test',
       ['example.com'],
       undefined,
-      { transport: fake },
+      { transport: fake, maxRedirects: 2 },
     )
 
     expect(fake.resolve).toHaveBeenCalledWith('docs.example.com', expect.any(AbortSignal))
@@ -118,8 +118,176 @@ describe('DNS-pinned evidence fetch policy', () => {
     expect(crossOrigin.resolve).toHaveBeenCalledOnce()
   })
 
+  it('uses the official Cellar representation for a strict EUR-Lex CELEX 202 response', async () => {
+    const calls: string[] = []
+    const fake = transport(undefined, url => {
+      calls.push(url.toString())
+      if (url.hostname === 'eur-lex.europa.eu') {
+        return response(202, '<script>challenge()</script>', {
+          'content-type': 'text/html',
+          'set-cookie': 'challenge=secret',
+        })
+      }
+      if (url.pathname === '/resource/celex/32024R1689') {
+        return response(303, '', {
+          location: 'http://publications.europa.eu/resource/cellar/official-item/DOC_1',
+        })
+      }
+      return response(200, '<html><body>Article 113 applies from 2 August 2026.</body></html>', {
+        'content-type': 'application/xhtml+xml;charset=UTF-8',
+      })
+    })
+    const source = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689'
+
+    await expect(fetchEvidencePage(
+      source,
+      ['eur-lex.europa.eu', 'publications.europa.eu'],
+      undefined,
+      { transport: fake },
+    )).resolves.toMatchObject({
+      url: 'https://publications.europa.eu/resource/cellar/official-item/DOC_1',
+      mediaType: 'application/xhtml+xml',
+      derivedFrom: source,
+    })
+    expect(calls).toEqual([
+      source,
+      'https://publications.europa.eu/resource/celex/32024R1689',
+      'https://publications.europa.eu/resource/cellar/official-item/DOC_1',
+    ])
+  })
+
+  it('binds Cellar fallback to the exact original CELEX request', async () => {
+    const sourceA = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:AAAA'
+    const sourceB = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:BBBB'
+    const calls: string[] = []
+    const remap = transport(undefined, url => {
+      calls.push(url.toString())
+      return url.searchParams.get('uri') === 'CELEX:AAAA'
+        ? response(302, '', { location: sourceB })
+        : response(202, 'pending')
+    })
+    await expect(fetchEvidencePage(
+      sourceA,
+      ['eur-lex.europa.eu', 'publications.europa.eu'],
+      undefined,
+      { transport: remap },
+    )).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR' })
+    expect(calls).toEqual([sourceA, sourceB])
+    expect(calls.some(url => url.includes('publications.europa.eu'))).toBe(false)
+
+    const duplicateUri = `${sourceA}&uri=CELEX:BBBB`
+    const duplicate = transport(undefined, () => response(202, 'pending'))
+    await expect(fetchEvidencePage(
+      duplicateUri,
+      ['eur-lex.europa.eu', 'publications.europa.eu'],
+      undefined,
+      { transport: duplicate },
+    )).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_PENDING' })
+    expect(duplicate.request).toHaveBeenCalledOnce()
+  })
+
+  it('limits the HTTP Cellar upgrade to an exact resolver 303 and exact document path', async () => {
+    const source = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689'
+    const allowlist = ['eur-lex.europa.eu', 'publications.europa.eu']
+    const wrongStatus = transport(undefined, url => url.hostname === 'eur-lex.europa.eu'
+      ? response(202, 'pending')
+      : response(302, '', { location: 'http://publications.europa.eu/resource/cellar/item/DOC_1' }))
+    await expect(fetchEvidencePage(source, allowlist, undefined, { transport: wrongStatus }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR' })
+    expect(wrongStatus.request).toHaveBeenCalledTimes(2)
+
+    const badPath = transport(undefined, url => url.hostname === 'eur-lex.europa.eu'
+      ? response(202, 'pending')
+      : response(303, '', { location: 'http://publications.europa.eu/resource/cellar/item?document=1' }))
+    await expect(fetchEvidencePage(source, allowlist, undefined, { transport: badPath }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR' })
+    expect(badPath.request).toHaveBeenCalledTimes(2)
+
+    const direct = transport(undefined, () => response(303, '', {
+      location: 'http://publications.europa.eu/resource/cellar/item/DOC_1',
+    }))
+    await expect(fetchEvidencePage(
+      'https://publications.europa.eu/resource/celex/32024R1689',
+      ['publications.europa.eu'],
+      undefined,
+      { transport: direct },
+    )).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_URL_ERROR' })
+    expect(direct.request).toHaveBeenCalledOnce()
+  })
+
+  it('accepts only the exact Cellar XHTML document and forbids later redirects', async () => {
+    const source = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689'
+    const allowlist = ['eur-lex.europa.eu', 'publications.europa.eu']
+    const wrongMime = transport(undefined, url => {
+      if (url.hostname === 'eur-lex.europa.eu') return response(202, 'pending')
+      if (url.pathname.startsWith('/resource/celex/')) {
+        return response(303, '', { location: 'http://publications.europa.eu/resource/cellar/item/DOC_1' })
+      }
+      return response(200, 'not XHTML', { 'content-type': 'text/plain' })
+    })
+    await expect(fetchEvidencePage(source, allowlist, undefined, { transport: wrongMime }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR' })
+
+    const redirectedDocument = transport(undefined, url => {
+      if (url.hostname === 'eur-lex.europa.eu') return response(202, 'pending')
+      if (url.pathname.startsWith('/resource/celex/')) {
+        return response(303, '', { location: 'http://publications.europa.eu/resource/cellar/item/DOC_1' })
+      }
+      return response(302, '', { location: '/resource/cellar/other/DOC_2' })
+    })
+    await expect(fetchEvidencePage(source, allowlist, undefined, { transport: redirectedDocument }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR' })
+    expect(redirectedDocument.request).toHaveBeenCalledTimes(3)
+  })
+
+  it('charges both Cellar URL transitions to the redirect budget', async () => {
+    const source = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689'
+    const allowlist = ['eur-lex.europa.eu', 'publications.europa.eu']
+    const route = (url: URL): TransportResponse => {
+      if (url.hostname === 'eur-lex.europa.eu') return response(202, 'pending')
+      if (url.pathname.startsWith('/resource/celex/')) {
+        return response(303, '', { location: 'http://publications.europa.eu/resource/cellar/item/DOC_1' })
+      }
+      return response(200, '<html/>', { 'content-type': 'application/xhtml+xml' })
+    }
+    for (const [maxRedirects, requestCount] of [[0, 1], [1, 2]] as const) {
+      const fake = transport(undefined, route)
+      await expect(fetchEvidencePage(source, allowlist, undefined, { transport: fake, maxRedirects }))
+        .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR' })
+      expect(fake.request).toHaveBeenCalledTimes(requestCount)
+    }
+  })
+
+  it('never treats a generic 202 body as evidence or uses Cellar without an explicit allowlist', async () => {
+    const generic = transport(undefined, () => response(202, 'looks like evidence', {
+      'content-type': 'text/plain',
+      location: 'https://example.com/not-followed',
+    }))
+    await expect(fetchEvidencePage('https://example.com/current', ['example.com'], undefined, { transport: generic }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_PENDING' })
+    expect(generic.request).toHaveBeenCalledOnce()
+
+    const eurLex = transport(undefined, () => response(202, 'challenge'))
+    await expect(fetchEvidencePage(
+      'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689',
+      ['eur-lex.europa.eu'],
+      undefined,
+      { transport: eurLex },
+    )).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_PENDING' })
+    expect(eurLex.request).toHaveBeenCalledOnce()
+
+    const broadParent = transport(undefined, () => response(202, 'challenge'))
+    await expect(fetchEvidencePage(
+      'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689',
+      ['europa.eu'],
+      undefined,
+      { transport: broadParent },
+    )).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_PENDING' })
+    expect(broadParent.request).toHaveBeenCalledOnce()
+  })
+
   it('rejects unsupported content and obeys caller cancellation', async () => {
-    const wrongType = transport(undefined, () => response(200, '{}', { 'content-type': 'application/json' }))
+    const wrongType = transport(undefined, () => response(200, '%PDF', { 'content-type': 'application/pdf' }))
     await expect(fetchEvidencePage('https://example.com', undefined, undefined, { transport: wrongType }))
       .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR' })
 

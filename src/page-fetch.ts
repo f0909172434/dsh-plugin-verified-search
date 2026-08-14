@@ -5,7 +5,7 @@ import type { LookupFunction } from 'node:net'
 import { sourceMatchesDomain } from './domains.js'
 import { sanitizeSourceUrl } from './provider.js'
 
-const DEFAULT_MAX_BYTES = 1024 * 1024
+const DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_REDIRECTS = 3
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_BODY_IDLE_MS = 2_000
@@ -49,9 +49,11 @@ export interface FetchEvidenceOptions {
 
 export interface FetchedPage {
   readonly url: string
-  readonly mediaType: 'text/html' | 'text/plain' | 'text/markdown'
+  readonly mediaType: 'text/html' | 'application/xhtml+xml' | 'application/json' | 'text/plain' | 'text/markdown'
   readonly body: string
   readonly retrievedAt: string
+  /** Original official URL when a narrowly scoped alternate representation was used. */
+  readonly derivedFrom?: string
 }
 
 const blockedIpv4 = new BlockList()
@@ -159,8 +161,26 @@ function headerValue(
 
 function mediaTypeOf(headers: Readonly<Record<string, string | readonly string[] | undefined>>): FetchedPage['mediaType'] {
   const raw = headerValue(headers, 'content-type')?.split(';', 1)[0]?.trim().toLowerCase()
-  if (raw === 'text/html' || raw === 'text/plain' || raw === 'text/markdown') return raw
+  if (raw === 'text/html' || raw === 'application/xhtml+xml' || raw === 'application/json'
+    || raw === 'text/plain' || raw === 'text/markdown') return raw
   throw new EvidenceFetchError('evidence response used an unsupported content type', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
+}
+
+function requestHeaders(url: URL): Readonly<Record<string, string>> {
+  if (url.hostname === 'publications.europa.eu' && url.pathname.startsWith('/resource/')) {
+    return {
+      accept: 'application/xhtml+xml',
+      'accept-language': 'eng',
+      'accept-max-cs-size': String(DEFAULT_MAX_BYTES),
+      'accept-encoding': 'identity',
+      'user-agent': 'dsh-plugin-verified-search/0.3.0-experiment.0',
+    }
+  }
+  return {
+    accept: 'text/html, application/xhtml+xml;q=0.95, application/json;q=0.9, text/plain;q=0.85, text/markdown;q=0.8',
+    'accept-encoding': 'identity',
+    'user-agent': 'dsh-plugin-verified-search/0.3.0-experiment.0',
+  }
 }
 
 function normalizeHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string | readonly string[] | undefined> {
@@ -227,15 +247,11 @@ export class PinnedHttpsTransport implements EvidenceTransport {
         agent: false,
         signal,
         lookup: pinnedLookup(address),
-        headers: {
-          accept: 'text/html, text/plain;q=0.9, text/markdown;q=0.8',
-          'accept-encoding': 'identity',
-          'user-agent': 'dsh-plugin-verified-search/0.2.0-experiment.0',
-        },
+        headers: requestHeaders(url),
       }, response => {
         const statusCode = response.statusCode ?? 0
         const headers = normalizeHeaders(response.headers)
-        if ([301, 302, 303, 307, 308].includes(statusCode)) {
+        if ([202, 301, 302, 303, 307, 308].includes(statusCode)) {
           response.destroy()
           request.destroy()
           finish(() => resolve({ statusCode, headers, bytes: new Uint8Array() }))
@@ -326,6 +342,50 @@ function validatedEvidenceUrl(value: string, allowedDomains: readonly string[] |
   return url
 }
 
+/** Canonicalize one evidence URL, remove sensitive/tracking material, and enforce its allowlist. */
+export function normalizeEvidenceUrl(value: string, allowedDomains: readonly string[] | undefined): string {
+  return validatedEvidenceUrl(value, allowedDomains).toString()
+}
+
+function cellarAlternateFor(
+  source: URL,
+  allowedDomains: readonly string[] | undefined,
+): URL | undefined {
+  if (source.hostname !== 'eur-lex.europa.eu' || source.pathname !== '/legal-content/EN/TXT/') return undefined
+  const uriValues = source.searchParams.getAll('uri')
+  if (uriValues.length !== 1 || [...source.searchParams.keys()].some(name => name !== 'uri')) return undefined
+  const raw = uriValues[0]
+  const match = /^CELEX:([0-9A-Z]{1,32})$/u.exec(raw ?? '')
+  if (match === null || allowedDomains === undefined
+    || !allowedDomains.includes('eur-lex.europa.eu')
+    || !allowedDomains.includes('publications.europa.eu')) return undefined
+  const alternate = new URL(`https://publications.europa.eu/resource/celex/${match[1]}`)
+  return alternate
+}
+
+const CELLAR_DOCUMENT_PATH = /^\/resource\/cellar\/[A-Za-z0-9._~-]+\/DOC_[1-9][0-9]*$/u
+
+function cellarDocumentRedirect(current: URL, expectedWorkUrl: string, location: string): URL | undefined {
+  let candidate: URL
+  try {
+    candidate = new URL(location, current)
+  } catch {
+    return undefined
+  }
+  if (current.toString() !== expectedWorkUrl
+    || current.hostname !== 'publications.europa.eu'
+    || (candidate.protocol !== 'http:' && candidate.protocol !== 'https:')
+    || candidate.hostname !== 'publications.europa.eu'
+    || candidate.port !== ''
+    || candidate.username.length > 0
+    || candidate.password.length > 0
+    || candidate.search !== ''
+    || candidate.hash !== ''
+    || !CELLAR_DOCUMENT_PATH.test(candidate.pathname)) return undefined
+  if (candidate.protocol === 'http:') candidate.protocol = 'https:'
+  return candidate
+}
+
 /** Fetch one public HTTPS page through a DNS-pinned transport, enforcing an allowlist when supplied. */
 export async function fetchEvidencePage(
   sourceUrl: string,
@@ -360,7 +420,11 @@ export async function fetchEvidencePage(
   }
   try {
     let current = validatedEvidenceUrl(sourceUrl, allowedDomains)
-    const origin = current.origin
+    const original = current.toString()
+    let origin = current.origin
+    let cellarState: 'normal' | 'resolver' | 'document' = 'normal'
+    let cellarWorkUrl: string | undefined
+    let cellarDocumentUrl: string | undefined
     const seen = new Set<string>()
     for (let redirects = 0; ; redirects++) {
       throwIfAborted(operationSignal)
@@ -389,7 +453,30 @@ export async function fetchEvidencePage(
         operationSignal,
         deadlineError,
       )
+      if (response.statusCode === 202) {
+        if (cellarState !== 'normal') {
+          throw new EvidenceFetchError('official evidence representation remained pending', 'VERIFIED_RESEARCH_FETCH_PENDING')
+        }
+        if (redirects >= maxRedirects) {
+          throw new EvidenceFetchError('evidence redirect limit exceeded', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+        }
+        if (redirects !== 0 || current.toString() !== original) {
+          throw new EvidenceFetchError('EUR-Lex alternate requires the original CELEX request', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+        }
+        const alternate = cellarAlternateFor(current, allowedDomains)
+        if (alternate === undefined) {
+          throw new EvidenceFetchError('evidence endpoint returned HTTP 202', 'VERIFIED_RESEARCH_FETCH_PENDING')
+        }
+        cellarState = 'resolver'
+        cellarWorkUrl = alternate.toString()
+        current = alternate
+        origin = current.origin
+        continue
+      }
       if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+        if (cellarState === 'document') {
+          throw new EvidenceFetchError('Cellar document redirects were blocked', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+        }
         if (redirects >= maxRedirects) {
           throw new EvidenceFetchError('evidence redirect limit exceeded', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
         }
@@ -399,7 +486,20 @@ export async function fetchEvidencePage(
         }
         let target: URL
         try {
-          target = validatedEvidenceUrl(new URL(location, current).toString(), allowedDomains)
+          if (cellarState === 'resolver') {
+            if (response.statusCode !== 303 || cellarWorkUrl === undefined || current.toString() !== cellarWorkUrl) {
+              throw new EvidenceFetchError('Cellar work endpoint required an exact HTTP 303 representation redirect', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+            }
+            const document = cellarDocumentRedirect(current, cellarWorkUrl, location)
+            if (document === undefined) {
+              throw new EvidenceFetchError('Cellar work endpoint returned an invalid representation redirect', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+            }
+            target = validatedEvidenceUrl(document.toString(), allowedDomains)
+            cellarDocumentUrl = target.toString()
+            cellarState = 'document'
+          } else {
+            target = validatedEvidenceUrl(new URL(location, current).toString(), allowedDomains)
+          }
         } catch (error: unknown) {
           if (error instanceof EvidenceFetchError) throw error
           throw new EvidenceFetchError('evidence redirect Location was invalid', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR', { cause: error })
@@ -410,17 +510,32 @@ export async function fetchEvidencePage(
         current = target
         continue
       }
+      if (cellarState === 'resolver') {
+        throw new EvidenceFetchError('Cellar work endpoint did not return its required HTTP 303 redirect', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+      }
       if (response.statusCode !== 200) {
         throw new EvidenceFetchError(`evidence endpoint returned HTTP ${response.statusCode}`, 'VERIFIED_RESEARCH_FETCH_HTTP_ERROR')
       }
+      if (cellarState === 'document' && (cellarDocumentUrl === undefined || current.toString() !== cellarDocumentUrl)) {
+        throw new EvidenceFetchError('Cellar alternate did not end at its exact representation URL', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
+      }
       const mediaType = mediaTypeOf(response.headers)
+      if (cellarState === 'document' && mediaType !== 'application/xhtml+xml') {
+        throw new EvidenceFetchError('Cellar alternate did not return application/xhtml+xml', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
+      }
       let body: string
       try {
         body = new TextDecoder('utf-8', { fatal: true }).decode(response.bytes)
       } catch (error: unknown) {
         throw new EvidenceFetchError('evidence response was not valid UTF-8 text', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR', { cause: error })
       }
-      return { url: current.toString(), mediaType, body, retrievedAt: new Date().toISOString() }
+      return {
+        url: current.toString(),
+        mediaType,
+        body,
+        retrievedAt: new Date().toISOString(),
+        ...(cellarState === 'document' ? { derivedFrom: original } : {}),
+      }
     }
   } finally {
     clearTimeout(deadlineTimer)

@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type { SearchOptions, VerifiedSearchWireRequest } from './types.js'
 import { createVerifiedSearchTool, installVerifiedSearchPolicy } from './tool.js'
 import { createVerifiedResearchTool } from './research.js'
+import { createVerifiedJsonSelectionTool } from './json-tool.js'
 
 export {
   normalizeAllowedDomains,
@@ -20,6 +21,13 @@ export {
 export { mapResponse, search, searchInstruction, VerifiedSearchError } from './provider.js'
 export { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from './tool.js'
 export { createVerifiedResearchTool, formatResearchResult, research } from './research.js'
+export {
+  createVerifiedJsonSelectionTool,
+  formatJsonSelectionResult,
+  selectFetchedJson,
+} from './json-tool.js'
+export { JsonSelectionError, selectJsonMaxTies } from './json-selection.js'
+export type { JsonSelectionRequest, JsonSelectionResult } from './json-selection.js'
 export type { PageFetcher, SearchRunner } from './research.js'
 export { extractPageEvidence, normalizeFetchedPage } from './evidence.js'
 export type { NormalizedPage } from './evidence.js'
@@ -105,6 +113,7 @@ export function installForAgent(
     disposers.push(installVerifiedSearchPolicy(agentCtx))
     disposers.push(agentCtx.tools.register(createVerifiedSearchTool(options, timeoutMs)))
     disposers.push(agentCtx.tools.register(createVerifiedResearchTool(options, researchTimeoutMs, researchMaxResults)))
+    disposers.push(agentCtx.tools.register(createVerifiedJsonSelectionTool(Math.min(researchTimeoutMs, 60_000))))
   } catch (error: unknown) {
     for (const dispose of disposers.toReversed()) dispose()
     throw error

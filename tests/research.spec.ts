@@ -92,9 +92,8 @@ describe('bounded research coordinator', () => {
       'a:https://alpha.example/1',
       'b:https://beta.example/1',
       'c:https://gamma.example/1',
-      'a:https://alpha.example/2',
     ])
-    expect(output.truncated).toBe(true)
+    expect(output.truncated).toBe(false)
     expect(output.allLanesFetched).toBe(true)
     expect(runner.mock.calls.every(call => (call[1] as SearchOptions).maxUses === 2)).toBe(true)
   })
@@ -137,7 +136,7 @@ describe('bounded research coordinator', () => {
       }],
     }, options, undefined, runner, 16, fetcher)
 
-    expect(runner).toHaveBeenCalledOnce()
+    expect(runner).not.toHaveBeenCalled()
     expect(fetcher).toHaveBeenCalledWith(
       'https://docs.example.com/models',
       ['docs.example.com'],
@@ -150,6 +149,126 @@ describe('bounded research coordinator', () => {
       evidence: { excerpt: 'current flagship model ID model-v5-pro' },
     }])
     expect(output.allLanesFetched).toBe(true)
+  })
+
+  it('extracts one exact excerpt per required claim from the same fetched seed page', async () => {
+    const runner = vi.fn(async () => result([]))
+    const fetcher = vi.fn(async (url: string) => page(url, [
+      'Model identifier model-v5-pro.',
+      'Context window supports one million tokens.',
+      'Input price is two dollars per million tokens.',
+    ].join('\n')))
+    const output = await research({
+      query: 'three required facts',
+      lanes: [{
+        id: 'official',
+        query: 'official product facts',
+        requiredClaims: [
+          { id: 'model_id', query: 'model identifier model-v5-pro' },
+          { id: 'context', query: 'context window million tokens' },
+          { id: 'price', query: 'input price dollars million' },
+        ],
+        allowedDomains: ['docs.example.com'],
+        seedUrls: ['https://docs.example.com/models'],
+      }],
+    }, options, undefined, runner, 3, fetcher)
+
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(runner).not.toHaveBeenCalled()
+    expect(output.allClaimsCovered).toBe(true)
+    expect(output.unresolvedClaims).toEqual([])
+    expect(output.lanes[0]).toMatchObject({
+      status: 'fetched',
+      evidenceCount: 3,
+      stopReason: 'all_claims_covered',
+      seedChecks: [{ status: 'covered', coveredClaimIds: ['model_id', 'context', 'price'] }],
+    })
+    expect(output.sources).toHaveLength(1)
+    expect(output.sources[0]!.claimEvidence?.map(value => value.claimId)).toEqual(['model_id', 'context', 'price'])
+    for (const evidence of output.sources[0]!.claimEvidence ?? []) {
+      expect(evidence.excerpt.length).toBe(evidence.excerptEnd - evidence.excerptStart)
+      expect(evidence.contentSha256).toBe(output.sources[0]!.evidence?.contentSha256)
+    }
+  })
+
+  it('runs the predeclared gap query while any explicit claim remains unresolved', async () => {
+    const runner = vi.fn(async request => request.query === 'first search'
+      ? result(['https://official.example/first'])
+      : result(['https://official.example/second']))
+    const fetcher = vi.fn(async (url: string) => page(
+      url,
+      url.endsWith('/first') ? 'alpha identifier model-a1' : 'beta capacity 100000 tokens',
+    ))
+    const output = await research({
+      query: 'two independently required facts',
+      lanes: [{
+        id: 'official',
+        query: 'first search',
+        gapQuery: 'fallback beta search',
+        allowedDomains: ['official.example'],
+        requiredClaims: [
+          { id: 'alpha', query: 'alpha identifier model-a1' },
+          { id: 'beta', query: 'beta capacity tokens' },
+        ],
+      }],
+    }, options, undefined, runner, 2, fetcher)
+
+    expect(runner).toHaveBeenCalledTimes(2)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(output.lanes[0]).toMatchObject({ status: 'fetched', attempts: 2, evidenceCount: 2 })
+    expect(output.sources.flatMap(source => source.claimEvidence ?? []).map(value => value.claimId).toSorted())
+      .toEqual(['alpha', 'beta'])
+  })
+
+  it('reports every seed URL terminal state and skips later seeds after complete coverage', async () => {
+    const runner = vi.fn(async () => result([]))
+    const fetcher = vi.fn(async (url: string) => page(
+      url,
+      url.endsWith('/first') ? 'alpha identifier model-a1 beta capacity tokens' : 'must not fetch',
+    ))
+    const output = await research({
+      query: 'seed status',
+      lanes: [{
+        id: 'official',
+        query: 'seed status',
+        allowedDomains: ['docs.example.com'],
+        seedUrls: ['https://docs.example.com/first', 'https://docs.example.com/second'],
+        requiredClaims: [
+          { id: 'alpha', query: 'alpha identifier model-a1' },
+          { id: 'beta', query: 'beta capacity tokens' },
+        ],
+      }],
+    }, options, undefined, runner, 2, fetcher)
+
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(runner).not.toHaveBeenCalled()
+    expect(output.lanes[0]!.seedChecks).toMatchObject([
+      { url: 'https://docs.example.com/first', status: 'covered', coveredClaimIds: ['alpha', 'beta'] },
+      { url: 'https://docs.example.com/second', status: 'skipped', coveredClaimIds: [] },
+    ])
+  })
+
+  it('rejects invalid required claims and insufficient retained-source capacity before effects', async () => {
+    const runner = vi.fn()
+    const fetcher = vi.fn()
+    await expect(research({
+      query: 'q',
+      lanes: [{
+        id: 'claims',
+        query: 'q',
+        requiredClaims: Array.from({ length: 4 }, (_, index) => ({ id: `c${index}`, query: `claim ${index}` })),
+      }],
+    }, options, undefined, runner, 16, fetcher)).rejects.toThrow(/required_claims must contain 1-3/u)
+    await expect(research({
+      query: 'q',
+      lanes: [{
+        id: 'claims',
+        query: 'q',
+        requiredClaims: [{ id: 'a', query: 'claim alpha' }, { id: 'b', query: 'claim beta' }],
+      }],
+    }, options, undefined, runner, 1, fetcher)).rejects.toThrow(/from 2 to 32/u)
+    expect(runner).not.toHaveBeenCalled()
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('retries a transiently rejected cached page during the gap round', async () => {
@@ -434,6 +553,38 @@ describe('bounded research coordinator', () => {
     ))).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_INVARIANT' })
   })
 
+  it('accepts only the explicit EUR-Lex to official Cellar alternate provenance', async () => {
+    const source = 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689'
+    const final = 'https://publications.europa.eu/resource/cellar/official-item/DOC_1'
+    const request = {
+      query: 'Article 113 application date',
+      lanes: [{
+        id: 'law',
+        query: 'Article 113 application date',
+        allowedDomains: ['eur-lex.europa.eu', 'publications.europa.eu'],
+        seedUrls: [source],
+      }],
+    } as const
+    const output = await research(request, options, undefined, async () => result([]), 16, async () => ({
+      ...page(final, 'Article 113 application date 2 August 2026'),
+      mediaType: 'application/xhtml+xml',
+      derivedFrom: source,
+    }))
+    expect(output.allClaimsCovered).toBe(true)
+    expect(output.sources[0]?.evidence?.finalUrl).toBe(final)
+
+    await expect(research(request, options, undefined, async () => result([]), 16, async () => ({
+      ...page('https://evil.example/resource/cellar/forged', 'Article 113 application date 2 August 2026'),
+      derivedFrom: source,
+    }))).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_INVARIANT' })
+
+    await expect(research(request, options, undefined, async () => result([]), 16, async () => ({
+      ...page(final, 'Article 113 application date 2 August 2026'),
+      mediaType: 'text/plain',
+      derivedFrom: source,
+    }))).rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_INVARIANT' })
+  })
+
   it('rethrows credential and unknown invariant failures after workers settle', async () => {
     for (const failure of [
       new VerifiedSearchError('missing', 'VERIFIED_SEARCH_CREDENTIAL_MISSING'),
@@ -468,6 +619,14 @@ describe('model-facing research tool', () => {
         id: 'official',
         query: 'official current model',
         status: 'missing',
+        claims: [{
+          id: 'primary',
+          query: 'official current model',
+          status: 'missing',
+          evidenceCount: 0,
+        }],
+        seedChecks: [],
+        stopReason: 'plan_exhausted',
         sourceCount: 0,
         evidenceCount: 0,
         fetchCount: 1,
@@ -477,6 +636,8 @@ describe('model-facing research tool', () => {
         attempts: 2,
       }],
       unresolvedLanes: ['official'],
+      unresolvedClaims: [{ lane: 'official', claim: 'primary' }],
+      allClaimsCovered: false,
       allLanesFetched: false,
       truncated: false,
       filteredOut: 3,
@@ -528,6 +689,7 @@ describe('model-facing research tool', () => {
       expect(JSON.stringify(schema?.parameters)).toContain('allowed_domains')
       expect(JSON.stringify(schema?.parameters)).toContain('gap_query')
       expect(JSON.stringify(schema?.parameters)).toContain('seed_urls')
+      expect(JSON.stringify(schema?.parameters)).toContain('required_claims')
       expect(ctx.tools.executionMode({
         signal: new AbortController().signal,
         callId: 'research-mode' as never,

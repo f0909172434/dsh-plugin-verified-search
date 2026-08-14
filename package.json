@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-verified-search",
-  "version": "0.2.0-experiment.0",
+  "version": "0.3.0-experiment.0",
   "description": "Verified current-source search workflow for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",

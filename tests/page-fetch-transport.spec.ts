@@ -73,9 +73,10 @@ afterEach(() => vi.useRealTimers())
 
 describe('pinned HTTPS transport resource bounds', () => {
   it.each([
+    [202, { 'content-type': 'text/html', 'set-cookie': 'ignored=1' }, 'resolve'],
     [302, { location: '/next' }, 'resolve'],
     [404, { 'content-type': 'text/plain' }, 'reject'],
-    [200, { 'content-type': 'application/json' }, 'reject'],
+    [200, { 'content-type': 'application/pdf' }, 'reject'],
     [200, { 'content-type': 'text/plain', 'content-encoding': 'gzip' }, 'reject'],
     [200, { 'content-type': 'text/plain', 'content-disposition': 'attachment' }, 'reject'],
     [200, { 'content-type': 'text/plain', 'content-length': '999' }, 'reject'],
@@ -88,6 +89,26 @@ describe('pinned HTTPS transport resource bounds', () => {
     expect(harness.request.destroy).toHaveBeenCalledOnce()
     expect(harness.response.destroyed).toBe(true)
     expect(harness.request.destroyed).toBe(true)
+  })
+
+  it('uses a fixed credential-free request profile for official Cellar representations', async () => {
+    const harness = requestHarness({ headers: { 'content-type': 'application/xhtml+xml' } })
+    await expect(harness.transport.request(
+      new URL('https://publications.europa.eu/resource/celex/32024R1689'),
+      address,
+      undefined,
+      { ...limits, maxBytes: 2 * 1024 * 1024 },
+    )).resolves.toMatchObject({ statusCode: 200 })
+    const headers = harness.options()?.headers as Record<string, string>
+    expect(headers).toMatchObject({
+      accept: 'application/xhtml+xml',
+      'accept-language': 'eng',
+      'accept-max-cs-size': '2097152',
+      'accept-encoding': 'identity',
+    })
+    expect(headers).not.toHaveProperty('cookie')
+    expect(headers).not.toHaveProperty('authorization')
+    expect(headers).not.toHaveProperty('referer')
   })
 
   it('pins lookup to the validated address and enforces the streamed byte limit', async () => {

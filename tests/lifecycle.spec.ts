@@ -94,7 +94,7 @@ describe('apply lifecycle', () => {
     const plugin = mount(ctx)
     await plugin
 
-    expect(visibleTools(ctx, existing.agent)).toEqual(['verified_research', 'verified_search'])
+    expect(visibleTools(ctx, existing.agent)).toEqual(['verified_json_selection', 'verified_research', 'verified_search'])
     expect(visibleTools(ctx, existingMinimal.agent)).toEqual(['bash', 'str_replace_editor'])
 
     const future = await stubAgent(ctx, 'future-web', webPresetKey)
@@ -104,7 +104,7 @@ describe('apply lifecycle', () => {
     ctx.agents.register(future.agent)
     ctx.agents.register(futureMinimal.agent)
 
-    expect(visibleTools(ctx, future.agent)).toEqual(['verified_research', 'verified_search'])
+    expect(visibleTools(ctx, future.agent)).toEqual(['verified_json_selection', 'verified_research', 'verified_search'])
     expect(visibleTools(ctx, futureMinimal.agent)).toEqual(['bash', 'str_replace_editor'])
   })
 
@@ -118,7 +118,7 @@ describe('apply lifecycle', () => {
 
     const plugin = mount(ctx)
     await plugin
-    expect(visibleTools(ctx, agent)).toEqual(['verified_research', 'verified_search'])
+    expect(visibleTools(ctx, agent)).toEqual(['verified_json_selection', 'verified_research', 'verified_search'])
 
     await plugin.dispose()
     expect(visibleTools(ctx, agent)).toEqual(['web_search'])
@@ -134,7 +134,7 @@ describe('apply lifecycle', () => {
 
     const plugin = mount(ctx)
     await plugin
-    expect(visibleTools(ctx, agent)).toEqual(['verified_research', 'verified_search'])
+    expect(visibleTools(ctx, agent)).toEqual(['verified_json_selection', 'verified_research', 'verified_search'])
 
     unregister()
 
@@ -159,7 +159,7 @@ describe('apply lifecycle', () => {
 
     binding.rebind(webPresetKey)
     ctx.emit('agent-preset/selected', candidate.agent.id, 'web')
-    expect(visibleTools(ctx, candidate.agent)).toEqual(['verified_research', 'verified_search'])
+    expect(visibleTools(ctx, candidate.agent)).toEqual(['verified_json_selection', 'verified_research', 'verified_search'])
 
     binding.rebind(minimalPresetKey)
     ctx.emit('agent-preset/selected', candidate.agent.id, 'minimal')
