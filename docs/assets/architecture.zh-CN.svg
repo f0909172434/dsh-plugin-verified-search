@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-plugin-verified-search 有界证据工作流</title>
+  <desc id="desc">从带日期的问题，经过确定性 JSON 工具或可验证研究、安全提取与精确证据，最后进行一次终端合成。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071426"/>
+      <stop offset="1" stop-color="#102a43"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#28c7a5"/>
+      <stop offset="1" stop-color="#4ca6ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".28"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0l10 5-10 5z" fill="#76d7c4"/>
+    </marker>
+    <style>
+      .title{font:700 29px Inter,"Microsoft YaHei","Noto Sans SC",Segoe UI,sans-serif;fill:#f7fbff}.subtitle{font:400 16px Inter,"Microsoft YaHei","Noto Sans SC",Segoe UI,sans-serif;fill:#aac5dd}.box{fill:#102f4b;stroke:#315b78;stroke-width:2}.box2{fill:#0c3d42;stroke:#2ca58d;stroke-width:2}.box3{fill:#25294d;stroke:#7179c9;stroke-width:2}.label{font:700 19px Inter,"Microsoft YaHei","Noto Sans SC",Segoe UI,sans-serif;fill:#f7fbff}.small{font:400 14px Inter,"Microsoft YaHei","Noto Sans SC",Segoe UI,sans-serif;fill:#c7dcec}.pill{font:600 13px Inter,"Microsoft YaHei","Noto Sans SC",Segoe UI,sans-serif;fill:#dffbf4}.arrow{fill:none;stroke:#76d7c4;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1200" height="620" rx="24" fill="url(#bg)"/>
+  <rect x="52" y="42" width="8" height="54" rx="4" fill="url(#accent)"/>
+  <text x="78" y="69" class="title">可验证搜索是一条有界证据流程</text>
+  <text x="78" y="94" class="subtitle">时间、来源范围、精确提取、确定性 JSON，以及诚实披露未解字段</text>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="55" y="150" width="220" height="126" rx="18"/>
+    <text x="80" y="185" class="label">1 · 带日期的问题</text>
+    <text x="80" y="215" class="small">明确的截止时间</text>
+    <text x="80" y="239" class="small">类型化 claims 与 domains</text>
+    <rect x="80" y="251" width="142" height="18" rx="9" fill="#174e62"/>
+    <text x="91" y="264" class="pill">dsh-time-context</text>
+
+    <rect class="box3" x="350" y="128" width="270" height="174" rx="18"/>
+    <text x="375" y="164" class="label">2 · 选择有界工具</text>
+    <text x="375" y="194" class="small">verified_json_selection</text>
+    <text x="375" y="218" class="small">verified_json_numeric_extrema</text>
+    <text x="375" y="242" class="small">verified_json_projection</text>
+    <text x="375" y="266" class="small">verified_search / verified_research</text>
+
+    <rect class="box2" x="700" y="128" width="445" height="174" rx="18"/>
+    <text x="725" y="164" class="label">3 · 在硬性边界内获取</text>
+    <text x="725" y="194" class="small">允许列表 HTTPS · 公共 IP · DNS 绑定连接</text>
+    <text x="725" y="218" class="small">逐跳 redirect 验证 · bytes / time / media 上限</text>
+    <text x="725" y="242" class="small">严格 JSON 解析 · 精确 number lexeme</text>
+    <text x="725" y="266" class="small">Provider snippet 只作 discovery metadata</text>
+
+    <rect class="box2" x="205" y="384" width="390" height="164" rx="18"/>
+    <text x="230" y="421" class="label">4 · 保留可审计证据</text>
+    <text x="230" y="451" class="small">精确连续 excerpt + offsets</text>
+    <text x="230" y="475" class="small">retrieved_at + 规范化 SHA-256</text>
+    <text x="230" y="499" class="small">每个 claim：covered / blocked / missing</text>
+    <text x="230" y="523" class="small">所有远程文本均标记为不可信</text>
+
+    <rect class="box3" x="700" y="384" width="335" height="164" rx="18"/>
+    <text x="725" y="421" class="label">5 · 只合成一次</text>
+    <text x="725" y="451" class="small">只根据已保留证据回答</text>
+    <text x="725" y="475" class="small">逐项标记 unresolved claim</text>
+    <text x="725" y="499" class="small">本轮阻止 shell / search fallback</text>
+    <rect x="725" y="516" width="150" height="18" rx="9" fill="#393f78"/>
+    <text x="736" y="529" class="pill">回合级收敛</text>
+  </g>
+
+  <path class="arrow" d="M275 213h65"/>
+  <path class="arrow" d="M620 213h70"/>
+  <path class="arrow" d="M923 310v45c0 18-15 29-33 29H595"/>
+  <path class="arrow" d="M595 466h95"/>
+  <text x="68" y="594" class="subtitle">工作流程可验证 ≠ 保证索引、发布者或最终答案永远正确。</text>
+</svg>

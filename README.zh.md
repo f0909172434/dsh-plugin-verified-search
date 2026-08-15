@@ -1,6 +1,6 @@
 # dsh-plugin-verified-search
 
-[English](README.md) · [繁體中文](README.zh.md)
+[English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
 這是一個可直接安裝到 DeepSeek Harness 的社群外掛，專門處理「目前、最新、截至某日」等需要明確來源範圍與誠實揭露證據缺口的搜尋。
 

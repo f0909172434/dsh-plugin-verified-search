@@ -1,6 +1,6 @@
 # dsh-plugin-verified-search
 
-[English](README.md) · [繁體中文](README.zh.md)
+[English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
 An installable DeepSeek Harness plugin for current/latest/as-of searches that need explicit source scope and honest evidence gaps.
 
