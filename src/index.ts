@@ -7,7 +7,15 @@ import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type { SearchOptions, VerifiedSearchWireRequest } from './types.js'
-import { createVerifiedSearchTool, installVerifiedSearchPolicy } from './tool.js'
+import {
+  createVerifiedSearchTool,
+  installVerifiedResearchFinalizationPolicy,
+  installVerifiedSearchPolicy,
+} from './tool.js'
+import { createVerifiedResearchTool } from './research.js'
+import { createVerifiedJsonSelectionTool } from './json-tool.js'
+import { createVerifiedJsonNumericSelectionTool } from './json-numeric-tool.js'
+import { createVerifiedJsonProjectionTool } from './json-projection-tool.js'
 
 export {
   normalizeAllowedDomains,
@@ -17,8 +25,74 @@ export {
   SearchFilterViolationError,
 } from './domains.js'
 export { mapResponse, search, searchInstruction, VerifiedSearchError } from './provider.js'
-export { createVerifiedSearchTool, formatResult, installVerifiedSearchPolicy } from './tool.js'
-export type { SearchOptions, VerifiedSearchRequest, VerifiedSearchResult, VerifiedSearchSource, VerifiedSearchWireRequest } from './types.js'
+export {
+  createVerifiedSearchTool,
+  formatResult,
+  installVerifiedResearchFinalizationPolicy,
+  installVerifiedSearchPolicy,
+} from './tool.js'
+export {
+  createVerifiedResearchTool,
+  formatResearchResult,
+  research,
+  researchFinalizationInstruction,
+} from './research.js'
+export {
+  createVerifiedJsonSelectionTool,
+  formatJsonSelectionResult,
+  selectFetchedJson,
+} from './json-tool.js'
+export {
+  createVerifiedJsonNumericSelectionTool,
+  formatJsonNumericSelectionResult,
+  selectFetchedJsonNumeric,
+} from './json-numeric-tool.js'
+export {
+  createVerifiedJsonProjectionTool,
+  formatJsonProjectionResult,
+  projectFetchedJson,
+} from './json-projection-tool.js'
+export { JsonSelectionError, selectJsonMaxTies } from './json-selection.js'
+export type { JsonSelectionRequest, JsonSelectionResult } from './json-selection.js'
+export {
+  JsonNumericSelectionError,
+  selectJsonNumericTies,
+} from './json-numeric-selection.js'
+export type {
+  JsonNumberLexeme,
+  JsonNumericProjectedScalar,
+  JsonNumericSelectionRequest,
+  JsonNumericSelectionResult,
+} from './json-numeric-selection.js'
+export { JsonProjectionError, projectJsonRows } from './json-projection.js'
+export type {
+  JsonNestedProjectionRequest,
+  JsonProjectionRequest,
+  JsonProjectionResult,
+  JsonProjectionScalar,
+  JsonProjectionWhere,
+  JsonRowProjection,
+} from './json-projection.js'
+export type { PageFetcher, SearchRunner } from './research.js'
+export { extractPageEvidence, normalizeFetchedPage } from './evidence.js'
+export type { NormalizedPage } from './evidence.js'
+export { EvidenceFetchError, fetchEvidencePage, isPublicAddress } from './page-fetch.js'
+export type { FetchedPage, FetchEvidenceOptions, ResolvedAddress } from './page-fetch.js'
+export type {
+  SearchOptions,
+  VerifiedResearchLane,
+  VerifiedResearchLaneResult,
+  VerifiedResearchLaneStatus,
+  VerifiedResearchClaimValueKind,
+  VerifiedResearchRequest,
+  VerifiedResearchResult,
+  VerifiedResearchSource,
+  VerifiedPageEvidence,
+  VerifiedSearchRequest,
+  VerifiedSearchResult,
+  VerifiedSearchSource,
+  VerifiedSearchWireRequest,
+} from './types.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -51,6 +125,8 @@ export interface Config {
   maxUses?: number
   maxResults?: number
   searchTimeoutMs?: number
+  researchTimeoutMs?: number
+  researchMaxResults?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -63,6 +139,10 @@ export const Config: z<Config> = z.object({
   maxUses: z.number().step(1).min(1).default(5),
   maxResults: z.number().step(1).min(1).default(8),
   searchTimeoutMs: z.number().step(1).min(1).default(60_000),
+  researchTimeoutMs: z.number().step(1).min(1).default(150_000),
+  // One retained slot remains available for every model-facing claim in the
+  // worst-case four-lane, six-claim shape.
+  researchMaxResults: z.number().step(1).min(4).max(32).default(24),
 })
 
 type ResolvedConfig = Required<Omit<Config, 'apiKey'>> & Pick<Config, 'apiKey'>
@@ -72,11 +152,18 @@ export function installForAgent(
   agentCtx: Context,
   options: () => SearchOptions,
   timeoutMs = 60_000,
+  researchTimeoutMs = 150_000,
+  researchMaxResults = 24,
 ): () => void {
   const disposers: Array<() => void> = []
   try {
     disposers.push(installVerifiedSearchPolicy(agentCtx))
+    disposers.push(installVerifiedResearchFinalizationPolicy(agentCtx))
     disposers.push(agentCtx.tools.register(createVerifiedSearchTool(options, timeoutMs)))
+    disposers.push(agentCtx.tools.register(createVerifiedResearchTool(options, researchTimeoutMs, researchMaxResults)))
+    disposers.push(agentCtx.tools.register(createVerifiedJsonSelectionTool(Math.min(researchTimeoutMs, 60_000))))
+    disposers.push(agentCtx.tools.register(createVerifiedJsonNumericSelectionTool(Math.min(researchTimeoutMs, 60_000))))
+    disposers.push(agentCtx.tools.register(createVerifiedJsonProjectionTool(Math.min(researchTimeoutMs, 60_000))))
   } catch (error: unknown) {
     for (const dispose of disposers.toReversed()) dispose()
     throw error
@@ -96,6 +183,8 @@ export function apply(ctx: Context, input: Config): void {
     maxUses: input.maxUses ?? 5,
     maxResults: input.maxResults ?? 8,
     searchTimeoutMs: input.searchTimeoutMs ?? 60_000,
+    researchTimeoutMs: input.researchTimeoutMs ?? 150_000,
+    researchMaxResults: input.researchMaxResults ?? 24,
     ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
   }
   const optionsFor = (agentCtx: Context): SearchOptions => ({
@@ -137,7 +226,13 @@ export function apply(ctx: Context, input: Config): void {
         // The preset is an ancestor scope, so this agent-level filter hides its
         // inherited legacy tool while preserving this agent's verified_search.
         disposers.push(agent.ctx.tools.restrict({ deny: ['web_search'] }))
-        disposers.push(installForAgent(agent.ctx, () => optionsFor(agent.ctx), config.searchTimeoutMs))
+        disposers.push(installForAgent(
+          agent.ctx,
+          () => optionsFor(agent.ctx),
+          config.searchTimeoutMs,
+          config.researchTimeoutMs,
+          config.researchMaxResults,
+        ))
       } catch (error: unknown) {
         for (const dispose of disposers.toReversed()) dispose()
         throw error

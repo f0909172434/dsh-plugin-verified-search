@@ -18,6 +18,178 @@ export interface VerifiedSearchResult {
   readonly filteredOut: number
 }
 
+export interface VerifiedResearchDocumentTemporalAnchor {
+  readonly kind: 'year_month'
+  readonly role: 'document'
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string
+}
+
+export interface VerifiedResearchEventYearMonthAnchor {
+  readonly kind: 'year_month'
+  readonly role: 'event'
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string
+}
+
+export interface VerifiedResearchEventAfterAnchor {
+  readonly kind: 'after'
+  readonly role: 'event'
+  /** Strict exclusive cutoff in YYYY-MM-DD form. */
+  readonly value: string
+  readonly select: 'first'
+}
+
+export type VerifiedResearchTemporalAnchor =
+  | VerifiedResearchDocumentTemporalAnchor
+  | VerifiedResearchEventYearMonthAnchor
+  | VerifiedResearchEventAfterAnchor
+
+export type VerifiedResearchClaimScope =
+  | {
+      readonly kind: 'document'
+      /** Candidate-neutral identity markers required somewhere in the fetched document. */
+      readonly mustInclude: readonly string[]
+      readonly temporalAnchor?: VerifiedResearchDocumentTemporalAnchor
+    }
+  | {
+      readonly kind: 'event_row'
+      /** Candidate-neutral row/section markers required in the retained excerpt. */
+      readonly mustInclude: readonly string[]
+      readonly temporalAnchor: VerifiedResearchEventYearMonthAnchor | VerifiedResearchEventAfterAnchor
+    }
+
+export type VerifiedResearchClaimValueKind =
+  | 'generic_text'
+  | 'cvss_assigned_version'
+  | 'cvss_vector'
+  | 'cvss_base_score'
+
+export interface VerifiedResearchClaim {
+  /** Stable caller-chosen identifier used in claim-level coverage reporting. */
+  readonly id: string
+  /** Exact fact or retrieval terms that require their own fetched-page excerpt. */
+  readonly query: string
+  /** Case-insensitive, whitespace-normalized substrings required in the retained excerpt. */
+  readonly evidenceMustInclude: readonly string[]
+  /** Typed value postcondition; omitted direct-API values retain generic-text compatibility. */
+  readonly valueKind?: VerifiedResearchClaimValueKind
+  /** Typed evidence boundary; mandatory for every explicit claim. */
+  readonly scope: VerifiedResearchClaimScope
+}
+
+export interface VerifiedResearchLane {
+  /** Stable caller-chosen identifier used in coverage reporting. */
+  readonly id: string
+  readonly query: string
+  /** Optional for v0.2 callers; omitted lanes receive one implicit `primary` claim. */
+  readonly requiredClaims?: readonly VerifiedResearchClaim[]
+  readonly allowedDomains?: readonly string[]
+  /** Optional canonical first-party pages to verify directly before relying on discovery rank. */
+  readonly seedUrls?: readonly string[]
+  /** Optional single retry query, executed only when the first pass has no excerpt. */
+  readonly gapQuery?: string
+}
+
+export interface VerifiedResearchRequest {
+  /** The complete question that all lanes collectively need to answer. */
+  readonly query: string
+  readonly lanes: readonly VerifiedResearchLane[]
+}
+
+export type VerifiedResearchLaneStatus = 'fetched' | 'partial' | 'discovered' | 'missing' | 'failed'
+
+export type VerifiedResearchClaimStatus = 'covered' | 'missing' | 'blocked'
+
+export type VerifiedResearchSeedStatus = 'covered' | 'no_match' | 'fetch_failed' | 'skipped'
+
+export type VerifiedResearchStopReason =
+  | 'all_claims_covered'
+  | 'plan_exhausted'
+  | 'provider_failed'
+  | 'budget_exhausted'
+
+export interface VerifiedPageEvidence {
+  readonly finalUrl: string
+  readonly excerpt: string
+  readonly excerptStart: number
+  readonly excerptEnd: number
+  readonly retrievedAt: string
+  /** SHA-256 of the normalized fetched page text. */
+  readonly contentSha256: string
+}
+
+export interface VerifiedClaimEvidence extends VerifiedPageEvidence {
+  readonly claimId: string
+  readonly valueKind: VerifiedResearchClaimValueKind
+  /** Caller-declared normalized substrings mechanically matched in this exact excerpt. */
+  readonly matchedRequiredPhrases: readonly string[]
+}
+
+export interface VerifiedResearchClaimResult {
+  readonly id: string
+  readonly query: string
+  readonly evidenceMustInclude: readonly string[]
+  readonly valueKind: VerifiedResearchClaimValueKind
+  /** Absent only for the deprecated implicit legacy claim. */
+  readonly scope?: VerifiedResearchClaimScope
+  readonly status: VerifiedResearchClaimStatus
+  readonly evidenceCount: 0 | 1
+}
+
+export interface VerifiedResearchSeedCheck {
+  readonly url: string
+  readonly status: VerifiedResearchSeedStatus
+  readonly coveredClaimIds: readonly string[]
+  readonly finalUrl?: string
+  readonly retrievedAt?: string
+  readonly contentSha256?: string
+  readonly errorCode?: string
+}
+
+export interface VerifiedResearchLaneResult {
+  readonly id: string
+  readonly query: string
+  readonly gapQuery?: string
+  readonly allowedDomains?: readonly string[]
+  readonly seedUrls?: readonly string[]
+  readonly status: VerifiedResearchLaneStatus
+  readonly claims: readonly VerifiedResearchClaimResult[]
+  readonly seedChecks: readonly VerifiedResearchSeedCheck[]
+  readonly stopReason: VerifiedResearchStopReason
+  readonly sourceCount: number
+  readonly evidenceCount: number
+  readonly fetchCount: number
+  readonly fetchErrorCount: number
+  readonly truncated: boolean
+  readonly filteredOut: number
+  readonly attempts: 1 | 2
+  readonly errorCode?: string
+}
+
+export interface VerifiedResearchSource extends VerifiedSearchSource {
+  readonly lane: string
+  readonly origin: 'seed' | 'search'
+  /** Search round that discovered or enriched this source. */
+  readonly round: 0 | 1
+  readonly evidence?: VerifiedPageEvidence
+  /** Claim-attributed exact excerpts; the singular evidence field remains for v0.2 consumers. */
+  readonly claimEvidence?: readonly VerifiedClaimEvidence[]
+}
+
+export interface VerifiedResearchResult {
+  readonly sources: readonly VerifiedResearchSource[]
+  readonly lanes: readonly VerifiedResearchLaneResult[]
+  readonly unresolvedLanes: readonly string[]
+  readonly unresolvedClaims: readonly { readonly lane: string; readonly claim: string }[]
+  /** Mechanical coverage only: every required claim retained an exact fetched-page excerpt. */
+  readonly allClaimsCovered: boolean
+  /** @deprecated Compatibility alias for allClaimsCovered. */
+  readonly allLanesFetched: boolean
+  readonly truncated: boolean
+  readonly filteredOut: number
+}
+
 export interface VerifiedSearchWireRequest {
   readonly endpoint: string
   readonly apiVersion: string
