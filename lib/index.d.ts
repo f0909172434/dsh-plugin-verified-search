@@ -20,11 +20,48 @@ interface VerifiedSearchResult {
   /** Provider-returned structured sources removed by the local allowlist. */
   readonly filteredOut: number;
 }
+interface VerifiedResearchDocumentTemporalAnchor {
+  readonly kind: 'year_month';
+  readonly role: 'document';
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string;
+}
+interface VerifiedResearchEventYearMonthAnchor {
+  readonly kind: 'year_month';
+  readonly role: 'event';
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string;
+}
+interface VerifiedResearchEventAfterAnchor {
+  readonly kind: 'after';
+  readonly role: 'event';
+  /** Strict exclusive cutoff in YYYY-MM-DD form. */
+  readonly value: string;
+  readonly select: 'first';
+}
+type VerifiedResearchClaimScope = {
+  readonly kind: 'document';
+  /** Candidate-neutral identity markers required somewhere in the fetched document. */
+  readonly mustInclude: readonly string[];
+  readonly temporalAnchor?: VerifiedResearchDocumentTemporalAnchor;
+} | {
+  readonly kind: 'event_row';
+  /** Candidate-neutral row/section markers required in the retained excerpt. */
+  readonly mustInclude: readonly string[];
+  readonly temporalAnchor: VerifiedResearchEventYearMonthAnchor | VerifiedResearchEventAfterAnchor;
+};
+type VerifiedResearchClaimValueKind = 'generic_text' | 'cvss_assigned_version' | 'cvss_vector' | 'cvss_base_score';
 interface VerifiedResearchClaim {
   /** Stable caller-chosen identifier used in claim-level coverage reporting. */
   readonly id: string;
   /** Exact fact or retrieval terms that require their own fetched-page excerpt. */
   readonly query: string;
+  /** Case-insensitive, whitespace-normalized substrings required in the retained excerpt. */
+  readonly evidenceMustInclude: readonly string[];
+  /** Typed value postcondition; omitted direct-API values retain generic-text compatibility. */
+  readonly valueKind?: VerifiedResearchClaimValueKind;
+  /** Typed evidence boundary; mandatory for every explicit claim. */
+  readonly scope: VerifiedResearchClaimScope;
 }
 interface VerifiedResearchLane {
   /** Stable caller-chosen identifier used in coverage reporting. */
@@ -58,10 +95,17 @@ interface VerifiedPageEvidence {
 }
 interface VerifiedClaimEvidence extends VerifiedPageEvidence {
   readonly claimId: string;
+  readonly valueKind: VerifiedResearchClaimValueKind;
+  /** Caller-declared normalized substrings mechanically matched in this exact excerpt. */
+  readonly matchedRequiredPhrases: readonly string[];
 }
 interface VerifiedResearchClaimResult {
   readonly id: string;
   readonly query: string;
+  readonly evidenceMustInclude: readonly string[];
+  readonly valueKind: VerifiedResearchClaimValueKind;
+  /** Absent only for the deprecated implicit legacy claim. */
+  readonly scope?: VerifiedResearchClaimScope;
   readonly status: VerifiedResearchClaimStatus;
   readonly evidenceCount: 0 | 1;
 }
@@ -186,6 +230,8 @@ declare function search(request: VerifiedSearchRequest, options: SearchOptions, 
 declare function formatResult(result: VerifiedSearchResult): string;
 declare function createVerifiedSearchTool(options: () => SearchOptions, timeoutMs?: number): import("@deepseek-ai/dsh-tools").ToolDefinition;
 declare function installVerifiedSearchPolicy(ctx: Context): () => void;
+/** Block every further tool while terminal synthesis is pending in this turn. */
+declare function installVerifiedResearchFinalizationPolicy(ctx: Context): () => void;
 //#endregion
 //#region src/page-fetch.d.ts
 declare class EvidenceFetchError extends Error {
@@ -237,6 +283,7 @@ type PageFetcher = (url: string, allowedDomains: readonly string[] | undefined, 
 /** Execute a bounded, durable set of search lanes with at most one predeclared gap retry. */
 declare function research(request: VerifiedResearchRequest, options: SearchOptions, signal?: AbortSignal, runner?: SearchRunner, maxSources?: number, fetcher?: PageFetcher): Promise<VerifiedResearchResult>;
 declare function formatResearchResult(result: VerifiedResearchResult): string;
+declare function researchFinalizationInstruction(result: VerifiedResearchResult): string;
 declare function createVerifiedResearchTool(options: () => SearchOptions, timeoutMs?: number, maxSources?: number, fetcher?: PageFetcher): import("@deepseek-ai/dsh-tools").ToolDefinition;
 //#endregion
 //#region src/json-selection.d.ts
@@ -318,6 +365,194 @@ declare function formatJsonSelectionResult(result: VerifiedJsonSelectionResult):
 declare function selectFetchedJson(sourceUrl: string, allowedDomainsInput: readonly string[], selection: JsonSelectionRequest, signal?: AbortSignal, fetcher?: JsonPageFetcher): Promise<VerifiedJsonSelectionResult>;
 declare function createVerifiedJsonSelectionTool(timeoutMs?: number, fetcher?: JsonPageFetcher): import("@deepseek-ai/dsh-tools").ToolDefinition;
 //#endregion
+//#region src/json-numeric-selection.d.ts
+interface JsonNumberLexeme {
+  readonly [key: string]: string;
+  /** Exact JSON number token from the decoded UTF-8 source. */
+  readonly jsonNumber: string;
+}
+type JsonNumericProjectedScalar = string | boolean | null | JsonNumberLexeme;
+interface JsonNumericSelectionRequest {
+  /** RFC 6901 JSON Pointer from the root object to an array of objects. */
+  readonly arrayPointer: string;
+  /** Optional ISO-date cutoff applied before numeric selection. */
+  readonly filter?: {
+    readonly pointer: string;
+    readonly lte: string;
+  };
+  /** Optional strict non-numeric scalar equality filters. */
+  readonly where?: readonly {
+    readonly pointer: string;
+    readonly equals: string | boolean | null;
+  }[];
+  readonly extreme: {
+    readonly pointer: string;
+    readonly direction: 'max' | 'min';
+    readonly ties: 'all';
+  };
+  readonly project: readonly JsonProjection[];
+}
+interface JsonNumericSelectionRow {
+  readonly sourceIndex: number;
+  readonly values: Readonly<Record<string, JsonNumericProjectedScalar>>;
+}
+interface JsonNumericSelectionResult {
+  readonly complete: true;
+  readonly truncated: false;
+  readonly evidenceSha256: string;
+  readonly arrayPointer: string;
+  readonly filter?: {
+    readonly pointer: string;
+    readonly lte: string;
+  };
+  readonly where?: readonly {
+    readonly pointer: string;
+    readonly equals: string | boolean | null;
+  }[];
+  readonly extreme: {
+    readonly pointer: string;
+    readonly direction: 'max' | 'min';
+    /** Exact source lexeme of the first winning row. Equivalent ties may use another lexeme. */
+    readonly value: JsonNumberLexeme;
+    readonly ties: 'all';
+  };
+  readonly rowsScanned: number;
+  readonly rowsEligible: number;
+  readonly tieCount: number;
+  readonly rows: readonly JsonNumericSelectionRow[];
+}
+type JsonNumericSelectionErrorCode = 'JSON_NUMERIC_SELECTION_INVALID_REQUEST' | 'JSON_NUMERIC_SELECTION_INPUT_TOO_LARGE' | 'JSON_NUMERIC_SELECTION_INVALID_UTF8' | 'JSON_NUMERIC_SELECTION_INVALID_UNICODE' | 'JSON_NUMERIC_SELECTION_INVALID_JSON' | 'JSON_NUMERIC_SELECTION_DUPLICATE_KEY' | 'JSON_NUMERIC_SELECTION_PARSE_LIMIT_EXCEEDED' | 'JSON_NUMERIC_SELECTION_NUMBER_TOKEN_LIMIT_EXCEEDED' | 'JSON_NUMERIC_SELECTION_NUMBER_LEXEME_LIMIT_EXCEEDED' | 'JSON_NUMERIC_SELECTION_LOSSLESS_PARSE_UNAVAILABLE' | 'JSON_NUMERIC_SELECTION_INVALID_POINTER' | 'JSON_NUMERIC_SELECTION_POINTER_NOT_FOUND' | 'JSON_NUMERIC_SELECTION_POINTER_TYPE_MISMATCH' | 'JSON_NUMERIC_SELECTION_ROOT_TYPE_MISMATCH' | 'JSON_NUMERIC_SELECTION_ARRAY_TYPE_MISMATCH' | 'JSON_NUMERIC_SELECTION_ROW_LIMIT_EXCEEDED' | 'JSON_NUMERIC_SELECTION_ROW_TYPE_MISMATCH' | 'JSON_NUMERIC_SELECTION_INVALID_ISO_DATE' | 'JSON_NUMERIC_SELECTION_EXTREME_TYPE_MISMATCH' | 'JSON_NUMERIC_SELECTION_NON_SCALAR_PROJECTION' | 'JSON_NUMERIC_SELECTION_NO_MATCH' | 'JSON_NUMERIC_SELECTION_TIE_LIMIT_EXCEEDED' | 'JSON_NUMERIC_SELECTION_OUTPUT_TOO_LARGE';
+declare class JsonNumericSelectionError extends Error {
+  readonly code: JsonNumericSelectionErrorCode;
+  constructor(message: string, code: JsonNumericSelectionErrorCode, options?: ErrorOptions);
+}
+/**
+ * Select every exact numeric maximum/minimum tie from one bounded JSON object-array.
+ * JSON number comparison and projection use the source lexeme rather than IEEE-754.
+ */
+declare function selectJsonNumericTies(input: string | Uint8Array, rawRequest: JsonNumericSelectionRequest): JsonNumericSelectionResult;
+//#endregion
+//#region src/json-numeric-tool.d.ts
+type JsonNumericPageFetcher = (url: string, allowedDomains: readonly string[], signal?: AbortSignal) => Promise<FetchedPage>;
+interface VerifiedJsonNumericSelectionResult {
+  readonly sourceUrl: string;
+  readonly finalUrl: string;
+  readonly retrievedAt: string;
+  readonly selection: JsonNumericSelectionResult;
+}
+declare function formatJsonNumericSelectionResult(result: VerifiedJsonNumericSelectionResult): string;
+declare function selectFetchedJsonNumeric(sourceUrl: string, allowedDomainsInput: readonly string[], selection: JsonNumericSelectionRequest, signal?: AbortSignal, fetcher?: JsonNumericPageFetcher): Promise<VerifiedJsonNumericSelectionResult>;
+declare function createVerifiedJsonNumericSelectionTool(timeoutMs?: number, fetcher?: JsonNumericPageFetcher): import("@deepseek-ai/dsh-tools").ToolDefinition;
+//#endregion
+//#region src/json-projection.d.ts
+/** Numbers are excluded because ordinary JSON.parse cannot preserve their exact lexemes. */
+type JsonProjectionScalar = string | boolean | null;
+interface JsonRowProjection {
+  readonly name: string;
+  /** RFC 6901 JSON Pointer, resolved relative to the selected row. */
+  readonly pointer: string;
+}
+interface JsonProjectionWhere {
+  readonly pointer: string;
+  /** Numbers are deliberately excluded: JSON.parse cannot preserve their exact lexemes. */
+  readonly equals: string | boolean | null;
+}
+interface JsonNestedProjectionRequest {
+  /** RFC 6901 pointer relative to each matching parent row. */
+  readonly arrayPointer: string;
+  readonly where?: readonly JsonProjectionWhere[];
+  readonly project: readonly JsonRowProjection[];
+}
+interface JsonProjectionRequest {
+  /** RFC 6901 pointer from the JSON root to an array of objects. */
+  readonly arrayPointer: string;
+  readonly where?: readonly JsonProjectionWhere[];
+  readonly project: readonly JsonRowProjection[];
+  /** At most one nested array selection, relative to every matching parent row. */
+  readonly nested?: JsonNestedProjectionRequest;
+}
+interface JsonProjectionNestedRow {
+  /** Zero-based position in its parent row's nested source array. */
+  readonly sourceIndex: number;
+  readonly values: Readonly<Record<string, JsonProjectionScalar>>;
+}
+interface JsonNestedProjectionResult {
+  readonly arrayPointer: string;
+  readonly where?: readonly JsonProjectionWhere[];
+  /** Exact number of rows in this parent row's nested source array. */
+  readonly rowCount: number;
+  readonly matchCount: number;
+  /** Every strict match in source order. */
+  readonly rows: readonly JsonProjectionNestedRow[];
+}
+interface JsonProjectionRow {
+  /** Zero-based position in the top-level source array. */
+  readonly sourceIndex: number;
+  readonly values: Readonly<Record<string, JsonProjectionScalar>>;
+  readonly nested?: JsonNestedProjectionResult;
+}
+type JsonProjectionPointerRepair = {
+  readonly kind: 'ascii_case';
+  readonly segmentIndex: number;
+  readonly requestedSegment: string;
+  readonly effectiveSegment: string;
+} | {
+  readonly kind: 'root_array_fallback';
+};
+interface JsonProjectionPointerAudit {
+  readonly requestedPointer: string;
+  readonly effectivePointer: string;
+  readonly repairs: readonly JsonProjectionPointerRepair[];
+}
+interface JsonProjectionNamedPointerAudit extends JsonProjectionPointerAudit {
+  readonly name: string;
+}
+interface JsonProjectionPointerAudits {
+  readonly array: JsonProjectionPointerAudit;
+  readonly where: readonly JsonProjectionPointerAudit[];
+  readonly project: readonly JsonProjectionNamedPointerAudit[];
+  readonly nested?: {
+    readonly array: JsonProjectionPointerAudit;
+    readonly where: readonly JsonProjectionPointerAudit[];
+    readonly project: readonly JsonProjectionNamedPointerAudit[];
+  };
+}
+interface JsonProjectionResult {
+  readonly complete: true;
+  readonly truncated: false;
+  readonly evidenceSha256: string;
+  readonly arrayPointer: string;
+  readonly where?: readonly JsonProjectionWhere[];
+  readonly pointerAudits: JsonProjectionPointerAudits;
+  /** Exact number of rows in the selected source array. */
+  readonly rowCount: number;
+  readonly matchCount: number;
+  /** Every strict match in source order; no sort-derived semantics are applied. */
+  readonly rows: readonly JsonProjectionRow[];
+}
+type JsonProjectionErrorCode = 'JSON_PROJECTION_INVALID_REQUEST' | 'JSON_PROJECTION_INPUT_TOO_LARGE' | 'JSON_PROJECTION_INVALID_UTF8' | 'JSON_PROJECTION_INVALID_UNICODE' | 'JSON_PROJECTION_INVALID_JSON' | 'JSON_PROJECTION_DUPLICATE_KEY' | 'JSON_PROJECTION_PARSE_LIMIT_EXCEEDED' | 'JSON_PROJECTION_INVALID_POINTER' | 'JSON_PROJECTION_AMBIGUOUS_POINTER_REPAIR' | 'JSON_PROJECTION_INCONSISTENT_POINTER_REPAIR' | 'JSON_PROJECTION_POINTER_NOT_FOUND' | 'JSON_PROJECTION_POINTER_TYPE_MISMATCH' | 'JSON_PROJECTION_ROOT_TYPE_MISMATCH' | 'JSON_PROJECTION_ARRAY_TYPE_MISMATCH' | 'JSON_PROJECTION_ROW_LIMIT_EXCEEDED' | 'JSON_PROJECTION_ROW_TYPE_MISMATCH' | 'JSON_PROJECTION_NUMERIC_PROJECTION_UNSUPPORTED' | 'JSON_PROJECTION_NON_SCALAR_PROJECTION' | 'JSON_PROJECTION_OUTPUT_TOO_LARGE';
+declare class JsonProjectionError extends Error {
+  readonly code: JsonProjectionErrorCode;
+  constructor(message: string, code: JsonProjectionErrorCode, options?: ErrorOptions);
+}
+/**
+ * Project every strict match from a bounded JSON object-array in source order.
+ * No ranking, maximum, or inferred ordering semantics are applied.
+ */
+declare function projectJsonRows(input: string | Uint8Array, rawRequest: JsonProjectionRequest): JsonProjectionResult;
+//#endregion
+//#region src/json-projection-tool.d.ts
+type JsonProjectionPageFetcher = (url: string, allowedDomains: readonly string[], signal?: AbortSignal) => Promise<FetchedPage>;
+interface VerifiedJsonProjectionResult {
+  readonly sourceUrl: string;
+  readonly finalUrl: string;
+  readonly retrievedAt: string;
+  readonly projection: JsonProjectionResult;
+}
+declare function formatJsonProjectionResult(result: VerifiedJsonProjectionResult): string;
+declare function projectFetchedJson(sourceUrl: string, allowedDomainsInput: readonly string[], projection: JsonProjectionRequest, signal?: AbortSignal, fetcher?: JsonProjectionPageFetcher): Promise<VerifiedJsonProjectionResult>;
+declare function createVerifiedJsonProjectionTool(timeoutMs?: number, fetcher?: JsonProjectionPageFetcher): import("@deepseek-ai/dsh-tools").ToolDefinition;
+//#endregion
 //#region src/evidence.d.ts
 interface NormalizedPage {
   readonly url: string;
@@ -330,7 +565,7 @@ interface NormalizedPage {
 /** Convert a bounded fetched body into inert, normalized text. */
 declare function normalizeFetchedPage(page: FetchedPage): NormalizedPage;
 /** Select one exact, contiguous query-relevant excerpt from normalized page text. */
-declare function extractPageEvidence(page: NormalizedPage, query: string): VerifiedPageEvidence | undefined;
+declare function extractPageEvidence(page: NormalizedPage, query: string, requiredPhrases?: readonly string[], scope?: VerifiedResearchClaimScope, valueKind?: VerifiedResearchClaimValueKind): VerifiedPageEvidence | undefined;
 //#endregion
 //#region src/index.d.ts
 declare module '@deepseek-ai/cordis' {
@@ -361,5 +596,5 @@ declare const Config: z<Config>;
 declare function installForAgent(agentCtx: Context, options: () => SearchOptions, timeoutMs?: number, researchTimeoutMs?: number, researchMaxResults?: number): () => void;
 declare function apply(ctx: Context, input: Config): void;
 //#endregion
-export { Config, EvidenceFetchError, type FetchEvidenceOptions, type FetchedPage, JsonSelectionError, type JsonSelectionRequest, type JsonSelectionResult, type NormalizedPage, type PageFetcher, type ResolvedAddress, SearchFilterError, SearchFilterViolationError, type SearchOptions, type SearchRunner, type VerifiedPageEvidence, type VerifiedResearchLane, type VerifiedResearchLaneResult, type VerifiedResearchLaneStatus, type VerifiedResearchRequest, type VerifiedResearchResult, type VerifiedResearchSource, VerifiedSearchError, type VerifiedSearchRequest, type VerifiedSearchResult, type VerifiedSearchSource, type VerifiedSearchWireRequest, apply, createVerifiedJsonSelectionTool, createVerifiedResearchTool, createVerifiedSearchTool, enforceAllowedSources, extractPageEvidence, fetchEvidencePage, filterAllowedSources, formatJsonSelectionResult, formatResearchResult, formatResult, inject, installForAgent, installVerifiedSearchPolicy, isPublicAddress, mapResponse, name, normalizeAllowedDomains, normalizeFetchedPage, research, search, searchInstruction, selectFetchedJson, selectJsonMaxTies };
+export { Config, EvidenceFetchError, type FetchEvidenceOptions, type FetchedPage, type JsonNestedProjectionRequest, type JsonNumberLexeme, type JsonNumericProjectedScalar, JsonNumericSelectionError, type JsonNumericSelectionRequest, type JsonNumericSelectionResult, JsonProjectionError, type JsonProjectionRequest, type JsonProjectionResult, type JsonProjectionScalar, type JsonProjectionWhere, type JsonRowProjection, JsonSelectionError, type JsonSelectionRequest, type JsonSelectionResult, type NormalizedPage, type PageFetcher, type ResolvedAddress, SearchFilterError, SearchFilterViolationError, type SearchOptions, type SearchRunner, type VerifiedPageEvidence, type VerifiedResearchClaimValueKind, type VerifiedResearchLane, type VerifiedResearchLaneResult, type VerifiedResearchLaneStatus, type VerifiedResearchRequest, type VerifiedResearchResult, type VerifiedResearchSource, VerifiedSearchError, type VerifiedSearchRequest, type VerifiedSearchResult, type VerifiedSearchSource, type VerifiedSearchWireRequest, apply, createVerifiedJsonNumericSelectionTool, createVerifiedJsonProjectionTool, createVerifiedJsonSelectionTool, createVerifiedResearchTool, createVerifiedSearchTool, enforceAllowedSources, extractPageEvidence, fetchEvidencePage, filterAllowedSources, formatJsonNumericSelectionResult, formatJsonProjectionResult, formatJsonSelectionResult, formatResearchResult, formatResult, inject, installForAgent, installVerifiedResearchFinalizationPolicy, installVerifiedSearchPolicy, isPublicAddress, mapResponse, name, normalizeAllowedDomains, normalizeFetchedPage, projectFetchedJson, projectJsonRows, research, researchFinalizationInstruction, search, searchInstruction, selectFetchedJson, selectFetchedJsonNumeric, selectJsonMaxTies, selectJsonNumericTies };
 //# sourceMappingURL=index.d.ts.map

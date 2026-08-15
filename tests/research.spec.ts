@@ -54,6 +54,10 @@ const relevantFetcher: PageFetcher = async url => page(url, [
 
 const irrelevantFetcher: PageFetcher = async url => page(url, 'unrelated material without requested terms')
 
+function documentScope(...mustInclude: string[]) {
+  return { kind: 'document' as const, mustInclude }
+}
+
 describe('bounded research coordinator', () => {
   it('runs at most two lanes concurrently and round-robins before the global cap', async () => {
     let active = 0
@@ -164,9 +168,9 @@ describe('bounded research coordinator', () => {
         id: 'official',
         query: 'official product facts',
         requiredClaims: [
-          { id: 'model_id', query: 'model identifier model-v5-pro' },
-          { id: 'context', query: 'context window million tokens' },
-          { id: 'price', query: 'input price dollars million' },
+          { id: 'model_id', query: 'model identifier model-v5-pro', evidenceMustInclude: ['Model identifier'], scope: documentScope('Model identifier') },
+          { id: 'context', query: 'context window million tokens', evidenceMustInclude: ['Context window'], scope: documentScope('Context window') },
+          { id: 'price', query: 'input price dollars million', evidenceMustInclude: ['Input price'], scope: documentScope('Input price') },
         ],
         allowedDomains: ['docs.example.com'],
         seedUrls: ['https://docs.example.com/models'],
@@ -207,8 +211,8 @@ describe('bounded research coordinator', () => {
         gapQuery: 'fallback beta search',
         allowedDomains: ['official.example'],
         requiredClaims: [
-          { id: 'alpha', query: 'alpha identifier model-a1' },
-          { id: 'beta', query: 'beta capacity tokens' },
+          { id: 'alpha', query: 'alpha identifier model-a1', evidenceMustInclude: ['alpha identifier'], scope: documentScope('alpha') },
+          { id: 'beta', query: 'beta capacity tokens', evidenceMustInclude: ['beta capacity'], scope: documentScope('beta') },
         ],
       }],
     }, options, undefined, runner, 2, fetcher)
@@ -218,6 +222,42 @@ describe('bounded research coordinator', () => {
     expect(output.lanes[0]).toMatchObject({ status: 'fetched', attempts: 2, evidenceCount: 2 })
     expect(output.sources.flatMap(source => source.claimEvidence ?? []).map(value => value.claimId).toSorted())
       .toEqual(['alpha', 'beta'])
+  })
+
+  it('does not stop on a generic calendar header that misses a normalized-substring evidence postcondition', async () => {
+    const runner = vi.fn(async request => request.query === 'first calendar query'
+      ? result(['https://official.example/generic'])
+      : result(['https://official.example/july']))
+    const fetcher = vi.fn(async (url: string) => page(url, url.endsWith('/generic')
+      ? 'The committee holds eight scheduled meetings. 2026 FOMC Meetings.'
+      : '2026 FOMC Meetings\nJuly 28-29, 2026'))
+    const output = await research({
+      query: 'latest completed scheduled meeting',
+      lanes: [{
+        id: 'calendar',
+        query: 'first calendar query',
+        gapQuery: 'July 2026 scheduled FOMC meeting date range',
+        allowedDomains: ['official.example'],
+        requiredClaims: [{
+          id: 'meeting_dates',
+          query: 'scheduled FOMC meeting date range July 2026',
+          evidenceMustInclude: ['July', '2026'],
+          scope: {
+            kind: 'event_row',
+            mustInclude: ['July', '2026'],
+            temporalAnchor: { kind: 'year_month', role: 'event', value: '2026-07' },
+          },
+        }],
+      }],
+    }, options, undefined, runner, 2, fetcher)
+
+    expect(runner).toHaveBeenCalledTimes(2)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(output.allClaimsCovered).toBe(true)
+    expect(output.sources[0]?.claimEvidence?.[0]).toMatchObject({
+      claimId: 'meeting_dates',
+      matchedRequiredPhrases: ['July', '2026'],
+    })
   })
 
   it('reports every seed URL terminal state and skips later seeds after complete coverage', async () => {
@@ -234,8 +274,8 @@ describe('bounded research coordinator', () => {
         allowedDomains: ['docs.example.com'],
         seedUrls: ['https://docs.example.com/first', 'https://docs.example.com/second'],
         requiredClaims: [
-          { id: 'alpha', query: 'alpha identifier model-a1' },
-          { id: 'beta', query: 'beta capacity tokens' },
+          { id: 'alpha', query: 'alpha identifier model-a1', evidenceMustInclude: ['alpha identifier'], scope: documentScope('alpha') },
+          { id: 'beta', query: 'beta capacity tokens', evidenceMustInclude: ['beta capacity'], scope: documentScope('beta') },
         ],
       }],
     }, options, undefined, runner, 2, fetcher)
@@ -256,19 +296,80 @@ describe('bounded research coordinator', () => {
       lanes: [{
         id: 'claims',
         query: 'q',
-        requiredClaims: Array.from({ length: 4 }, (_, index) => ({ id: `c${index}`, query: `claim ${index}` })),
+        requiredClaims: Array.from({ length: 7 }, (_, index) => ({
+          id: `c${index}`,
+          query: `claim ${index}`,
+          evidenceMustInclude: [`claim ${index}`],
+          scope: documentScope(`claim ${index}`),
+        })),
       }],
-    }, options, undefined, runner, 16, fetcher)).rejects.toThrow(/required_claims must contain 1-3/u)
+    }, options, undefined, runner, 16, fetcher)).rejects.toThrow(/required_claims must contain 1-6/u)
     await expect(research({
       query: 'q',
       lanes: [{
         id: 'claims',
         query: 'q',
-        requiredClaims: [{ id: 'a', query: 'claim alpha' }, { id: 'b', query: 'claim beta' }],
+        requiredClaims: [
+          { id: 'a', query: 'claim alpha', evidenceMustInclude: ['claim alpha'], scope: documentScope('claim alpha') },
+          { id: 'b', query: 'claim beta', evidenceMustInclude: ['claim beta'], scope: documentScope('claim beta') },
+        ],
       }],
     }, options, undefined, runner, 1, fetcher)).rejects.toThrow(/from 2 to 32/u)
     expect(runner).not.toHaveBeenCalled()
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('accepts the complete four-lane, twenty-four-claim model-facing shape', async () => {
+    const runner = vi.fn()
+    const fetcher = vi.fn(async (url: string) => {
+      const lane = new URL(url).hostname.split('.')[0]!
+      return page(url, [
+        `${lane} official document`,
+        ...Array.from({ length: 6 }, (_, index) => `${lane} claim ${index} answer`),
+      ].join('\n'))
+    })
+    const lanes = Array.from({ length: 4 }, (_, laneIndex) => {
+      const lane = `lane${laneIndex}`
+      return {
+        id: lane,
+        query: `${lane} official facts`,
+        gapQuery: `${lane} official fallback`,
+        allowedDomains: [`${lane}.example`],
+        seedUrls: [`https://${lane}.example/source`],
+        requiredClaims: Array.from({ length: 6 }, (_, claimIndex) => ({
+          id: `claim${claimIndex}`,
+          query: `${lane} claim ${claimIndex} answer`,
+          evidenceMustInclude: [`${lane} claim ${claimIndex} answer`],
+          scope: documentScope(`${lane} official document`),
+        })),
+      }
+    })
+
+    const output = await research({
+      query: 'complete twenty-four-claim official comparison',
+      lanes,
+    }, options, undefined, runner, 24, fetcher)
+
+    expect(runner).not.toHaveBeenCalled()
+    expect(fetcher).toHaveBeenCalledTimes(4)
+    expect(output.lanes.flatMap(lane => lane.claims)).toHaveLength(24)
+    expect(output.sources).toHaveLength(4)
+    expect(output.allClaimsCovered).toBe(true)
+    expect(output.unresolvedClaims).toEqual([])
+    expect(output.sources.flatMap(source => source.claimEvidence ?? [])).toHaveLength(24)
+  })
+
+  it('rejects explicit claims without bounded normalized-substring evidence postconditions', async () => {
+    const runner = vi.fn()
+    await expect(research({
+      query: 'q',
+      lanes: [{
+        id: 'claims',
+        query: 'q',
+        requiredClaims: [{ id: 'a', query: 'claim alpha' } as never],
+      }],
+    }, options, undefined, runner)).rejects.toThrow(/evidence_must_include must contain 1-8/u)
+    expect(runner).not.toHaveBeenCalled()
   })
 
   it('retries a transiently rejected cached page during the gap round', async () => {
@@ -291,6 +392,38 @@ describe('bounded research coordinator', () => {
 
     expect(fetcher).toHaveBeenCalledTimes(2)
     expect(output.lanes[0]).toMatchObject({ status: 'fetched', attempts: 2, fetchCount: 2, fetchErrorCount: 1 })
+  })
+
+  it('skips known binary discovery URLs before selecting a fetchable HTML candidate', async () => {
+    const runner = vi.fn(async () => result([
+      'https://official.example/current/printable/pdf',
+      'https://official.example/current-page',
+    ]))
+    const fetcher = vi.fn(async (url: string) => page(url, 'official current answer evidence'))
+    const output = await research({
+      query: 'official current answer evidence',
+      lanes: [{
+        id: 'official',
+        query: 'official current answer evidence',
+        gapQuery: 'official fallback answer evidence',
+        allowedDomains: ['official.example'],
+        requiredClaims: [{
+          id: 'answer',
+          query: 'official current answer evidence',
+          evidenceMustInclude: ['current answer'],
+          scope: documentScope('official'),
+        }],
+      }],
+    }, options, undefined, runner, 24, fetcher)
+
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://official.example/current-page',
+      ['official.example'],
+      undefined,
+    )
+    expect(output.allClaimsCovered).toBe(true)
+    expect(output.sources.map(source => source.url)).toEqual(['https://official.example/current-page'])
   })
 
   it('does not run a gap query after a fetched first pass', async () => {
@@ -622,6 +755,8 @@ describe('model-facing research tool', () => {
         claims: [{
           id: 'primary',
           query: 'official current model',
+          evidenceMustInclude: [],
+          valueKind: 'generic_text',
           status: 'missing',
           evidenceCount: 0,
         }],
@@ -649,7 +784,104 @@ describe('model-facing research tool', () => {
     expect(text).toContain('filtered_out=3')
   })
 
-  it('adapts nested snake_case lanes, records both requests, and is exclusive', async () => {
+  it('keeps every bounded covered excerpt visible and does not echo unresolved candidate values', () => {
+    const decisive = 'FOMC statement. Voting against were Beth M. Hammack, Neel Kashkari, and Lorie K. Logan, who preferred to raise the target range.'
+    const excerpt = `${'background '.repeat(95)}\n${decisive}`
+    const statementScope = { kind: 'document', mustInclude: ['FOMC statement'] } as const
+    const text = formatResearchResult({
+      sources: [{
+        lane: 'statement',
+        origin: 'seed',
+        round: 0,
+        url: 'https://official.example/statement',
+        claimEvidence: [{
+          claimId: 'dissenters',
+          valueKind: 'generic_text',
+          matchedRequiredPhrases: ['Voting against'],
+          finalUrl: 'https://official.example/statement',
+          excerpt,
+          excerptStart: 0,
+          excerptEnd: excerpt.length,
+          retrievedAt: '2026-08-14T00:00:00.000Z',
+          contentSha256: 'a'.repeat(64),
+        }, {
+          claimId: 'policy_action',
+          valueKind: 'generic_text',
+          matchedRequiredPhrases: ['preferred'],
+          finalUrl: 'https://official.example/statement',
+          excerpt,
+          excerptStart: 0,
+          excerptEnd: excerpt.length,
+          retrievedAt: '2026-08-14T00:00:00.000Z',
+          contentSha256: 'a'.repeat(64),
+        }],
+      }],
+      lanes: [{
+        id: 'statement',
+        query: 'official statement',
+        status: 'partial',
+        claims: [
+          {
+            id: 'dissenters',
+            query: 'dissenters names',
+            evidenceMustInclude: ['Voting against'],
+            valueKind: 'generic_text',
+            scope: statementScope,
+            status: 'covered',
+            evidenceCount: 1,
+          },
+          {
+            id: 'policy_action',
+            query: 'dissenters preferred action',
+            evidenceMustInclude: ['preferred'],
+            valueKind: 'generic_text',
+            scope: statementScope,
+            status: 'covered',
+            evidenceCount: 1,
+          },
+          {
+            id: 'crew',
+            query: 'candidate names Alice Example and Bob Example',
+            evidenceMustInclude: ['Crew members'],
+            valueKind: 'generic_text',
+            scope: { kind: 'document', mustInclude: ['Artemis II'] },
+            status: 'missing',
+            evidenceCount: 0,
+          },
+        ],
+        seedChecks: [],
+        stopReason: 'plan_exhausted',
+        sourceCount: 1,
+        evidenceCount: 2,
+        fetchCount: 1,
+        fetchErrorCount: 0,
+        truncated: false,
+        filteredOut: 0,
+        attempts: 1,
+      }],
+      unresolvedLanes: ['statement'],
+      unresolvedClaims: [{ lane: 'statement', claim: 'crew' }],
+      allClaimsCovered: false,
+      allLanesFetched: false,
+      truncated: false,
+      filteredOut: 0,
+    })
+
+    expect(text).toContain(decisive)
+    const renderedLine = text.split('\n').find(line => line.trimStart().startsWith('fetched_excerpt_untrusted_json:'))
+    expect(renderedLine).toBeDefined()
+    expect(JSON.parse(renderedLine!.slice(renderedLine!.indexOf(':') + 1).trim())).toBe(excerpt)
+    expect(text).toContain('claim_ids: dissenters,policy_action')
+    expect(text).toContain('"matchedRequiredPhrases":["Voting against"]')
+    expect(text).toContain('"matchedRequiredPhrases":["preferred"]')
+    expect(text).toContain('"mustInclude":["FOMC statement"]')
+    expect(text).not.toContain('Alice Example')
+    expect(text).toContain('claim crew: missing; evidence=0; requested_fact_unverified=true')
+    expect(text).toContain('Tool arguments and claim queries are not evidence')
+    expect(text).toContain('Do not use pwsh, bash, Python, curl, Invoke-WebRequest, or any other network fallback')
+  })
+
+  it('requires typed snake_case claims, records the request, and is exclusive', async () => {
     const recorded: unknown[] = []
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: Array<{ text: string }> }> }
@@ -682,6 +914,13 @@ describe('model-facing research tool', () => {
         query: 'first query',
         allowed_domains: ['official.example'],
         gap_query: 'fallback query',
+        required_claims: [{
+          id: 'primary',
+          query: 'fallback query current official model evidence',
+          evidence_must_include: ['official model'],
+          value_kind: 'generic_text',
+          scope: { kind: 'document', must_include: ['current'] },
+        }],
       }],
     }
     try {
@@ -690,12 +929,40 @@ describe('model-facing research tool', () => {
       expect(JSON.stringify(schema?.parameters)).toContain('gap_query')
       expect(JSON.stringify(schema?.parameters)).toContain('seed_urls')
       expect(JSON.stringify(schema?.parameters)).toContain('required_claims')
+      expect(JSON.stringify(schema?.parameters)).toContain('temporal_anchor')
+      expect(JSON.stringify(schema?.parameters)).toContain('cvss_assigned_version')
       expect(ctx.tools.executionMode({
         signal: new AbortController().signal,
         callId: 'research-mode' as never,
         name: 'verified_research',
         arguments: args,
       })).toEqual({ kind: 'exclusive' })
+
+      const missingClaims = await ctx.tools.execute({
+        signal: new AbortController().signal,
+        callId: 'research-missing-claims' as never,
+        name: 'verified_research',
+        arguments: {
+          query: args.query,
+          lanes: [{
+            id: 'official',
+            query: 'first query',
+            allowed_domains: ['official.example'],
+            gap_query: 'fallback query',
+          }],
+        },
+      })
+      expect(missingClaims.isError).toBe(true)
+
+      const missingValueKind = structuredClone(args)
+      delete (missingValueKind.lanes[0]!.required_claims[0] as { value_kind?: string }).value_kind
+      const invalidValueKind = await ctx.tools.execute({
+        signal: new AbortController().signal,
+        callId: 'research-missing-value-kind' as never,
+        name: 'verified_research',
+        arguments: missingValueKind,
+      })
+      expect(invalidValueKind.isError).toBe(true)
 
       const executed = await ctx.tools.execute({
         signal: new AbortController().signal,
@@ -704,8 +971,8 @@ describe('model-facing research tool', () => {
         arguments: args,
       })
       expect(executed.isError).toBe(false)
-      expect(recorded).toHaveLength(2)
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(recorded).toHaveLength(1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
       expect(recorded.every((value) => (value as {
         body: { tools: Array<{ max_uses: number; allowed_domains: string[] }> }
       }).body.tools[0]!.max_uses === 2)).toBe(true)
@@ -715,8 +982,19 @@ describe('model-facing research tool', () => {
       expect(executed.meta).toMatchObject({
         allLanesFetched: true,
         unresolvedLanes: [],
-        lanes: [{ id: 'official', status: 'fetched', attempts: 2, evidenceCount: 1 }],
-        sources: [{ lane: 'official', round: 1, evidence: { excerpt: 'fallback query current official model evidence' } }],
+        lanes: [{
+          id: 'official',
+          status: 'fetched',
+          attempts: 1,
+          evidenceCount: 1,
+          claims: [{ id: 'primary', valueKind: 'generic_text' }],
+        }],
+        sources: [{
+          lane: 'official',
+          round: 0,
+          evidence: { excerpt: 'fallback query current official model evidence' },
+          claimEvidence: [{ claimId: 'primary', valueKind: 'generic_text' }],
+        }],
       })
     } finally {
       await ctx.fiber.dispose()

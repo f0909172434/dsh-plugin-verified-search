@@ -11,6 +11,7 @@ This project is the immediately installable companion to [deepseek-harness Discu
 - Adds a model-facing `verified_search` tool with `query` and optional `allowed_domains`.
 - Mounts Harness rc.6's built-in durable `dsh-time-context` every 60 seconds, covering the composition omission reported in [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344).
 - Hides and blocks the inherited legacy `web_search` for agents covered by the plugin.
+- After a successful structured JSON operation, hides and blocks every intermediate tool except `verified_research`; the agent must answer or proceed directly to one bounded research pass.
 - Requires absolute-date queries for mutable facts, a first-party allowlisted pass, and a separate unrestricted comparison pass.
 - Calls DeepSeek's Anthropic-compatible Messages endpoint with native `web_search_20250305`.
 - Records the exact credential-free auxiliary request before dispatch using Harness's persistence-known `web/deepseek-search-llm-request` event. The search query itself is durable session data, so never put a secret in it.
@@ -23,14 +24,19 @@ This project is the immediately installable companion to [deepseek-harness Discu
 
 `verified_search` remains the narrow, single-query lookup. The experimental `verified_research` tool handles comparisons and other questions that need several independently covered facts:
 
-- accepts one to four typed lanes, each with one to three optional `required_claims` (an omitted list becomes one implicit `primary` claim), optional `allowed_domains`, up to two caller-selected `seed_urls`, and at most one predeclared `gap_query`; the request-wide claim cap is 12;
+- accepts one to four typed lanes, each with one to six required model-facing `required_claims`, optional `allowed_domains`, up to two caller-selected `seed_urls`, and one required model-facing `gap_query`; the request-wide claim cap is 24, matching the complete four-lane schema rather than imposing a hidden lower runtime limit (the direct TypeScript API alone retains its deprecated implicit-claim compatibility path);
+- requires every explicit claim to declare 1–8 bounded `evidence_must_include` phrases; every phrase must match the final exact excerpt as a case-insensitive, whitespace/control-normalized substring before the claim can be marked covered;
+- requires every model-facing claim to declare `value_kind`: `generic_text`, `cvss_assigned_version`, `cvss_vector`, or `cvss_base_score`; CVSS kinds require a concrete metric block rather than UI tabs or generic prose;
+- requires every explicit claim to declare a typed `scope`: document scopes bind page-global candidate-neutral identity markers and may bind a document `year_month`, while event-row scopes require row-local markers plus either an exact event `year_month` or `after` plus `select: first`; rows containing metadata labels such as `Released` and `Last Update` cannot satisfy an event anchor;
 - checks seed URLs before discovery, searches only lanes with remaining claim gaps, and completes every search round before starting any gap retry, with at most two concurrent searches and `max_uses` capped at two per auxiliary request;
 - safely fetches selected public HTTPS pages instead of treating provider titles or snippets as proof;
+- skips discovery URLs with known unsupported binary paths such as `/printable/pdf`, `.pdf`, Office archives, and `.zip` before choosing the next text candidate; an explicit binary seed still fails visibly instead of being silently reinterpreted;
 - can directly check a caller-supplied allowlisted page even when provider discovery returns no candidates; this does not prove the URL is canonical or first-party;
-- extracts at most one exact, contiguous excerpt per declared claim with offsets, retrieval time, and the SHA-256 of normalized page text;
+- extracts at most one exact, contiguous excerpt per declared claim with offsets, retrieval time, and the SHA-256 of normalized page text, and renders the complete bounded excerpt as a JSON string so its original line and section boundaries survive without a second crop;
 - reserves a model-visible evidence source for every covered claim; one page can cover several claims without consuming extra source slots;
 - reports per-claim status, `unresolvedClaims`, `allClaimsCovered`, seed terminal states, fetch errors, and out-of-scope source counts; `allLanesFetched` remains a deprecated alias;
-- runs `gap_query` while any declared claim remains unresolved, then stops after the bounded plan and tells the agent to synthesize rather than start another research loop.
+- runs `gap_query` while any declared claim remains unresolved, then defers a value-free terminal-synthesis instruction and concludes the tool turn;
+- blocks every later tool call in the same turn, then clears at the durable `turn/end` boundary (with idle as a cancellation fallback), so shell, Python, `run_code`, MCP, or another search cannot bypass the bounded result without contaminating an already queued next turn.
 
 Example composite call:
 
@@ -42,8 +48,8 @@ Example composite call:
       "id": "deepseek",
       "query": "DeepSeek current flagship API model ID as of 2026-08-14",
       "required_claims": [
-        {"id": "model_id", "query": "latest DeepSeek flagship API model identifier"},
-        {"id": "context", "query": "that model context-window size"}
+        {"id": "model_id", "query": "latest DeepSeek flagship API model identifier", "evidence_must_include": ["Model ID"], "value_kind": "generic_text", "scope": {"kind": "document", "must_include": ["DeepSeek"]}},
+        {"id": "context", "query": "that model context-window size", "evidence_must_include": ["Context"], "value_kind": "generic_text", "scope": {"kind": "document", "must_include": ["DeepSeek"]}}
       ],
       "allowed_domains": ["api-docs.deepseek.com"],
       "seed_urls": ["https://api-docs.deepseek.com/api/list-models/"],
@@ -53,8 +59,8 @@ Example composite call:
       "id": "openai",
       "query": "OpenAI current flagship API model ID as of 2026-08-14",
       "required_claims": [
-        {"id": "model_id", "query": "latest OpenAI flagship API model identifier"},
-        {"id": "context", "query": "that model context-window size"}
+        {"id": "model_id", "query": "latest OpenAI flagship API model identifier", "evidence_must_include": ["Model ID"], "value_kind": "generic_text", "scope": {"kind": "document", "must_include": ["OpenAI"]}},
+        {"id": "context", "query": "that model context-window size", "evidence_must_include": ["Context window"], "value_kind": "generic_text", "scope": {"kind": "document", "must_include": ["OpenAI"]}}
       ],
       "allowed_domains": ["developers.openai.com"],
       "seed_urls": ["https://developers.openai.com/api/docs/models"],
@@ -64,9 +70,23 @@ Example composite call:
 }
 ```
 
-The full-page reader is deliberately narrow: HTTPS on port 443, DNS hostnames only, public IPs only, a DNS-pinned socket, same-origin redirects with validation on every hop, supported text/JSON media types, identity encoding, and bounded redirects, bytes, and time. Scripts and common non-content HTML regions are removed before inert text extraction. Fetched excerpts are still untrusted web content and are evidence candidates, not automatic entailment decisions.
+The full-page reader is deliberately narrow: HTTPS on port 443, DNS hostnames only, public IPs only, a DNS-pinned socket, same-origin redirects with validation on every hop, supported text/JSON media types, identity encoding, and bounded redirects, bytes, and time. Undeclared text and declared UTF-8 are decoded with fatal UTF-8 validation; the explicitly declared web labels `ISO-8859-1` and `windows-1252` use the WHATWG Windows-1252 decoder for first-party advisories such as Cisco's. Unknown, malformed, or duplicate charset declarations fail closed. Scripts and common non-content HTML regions are removed before inert text extraction. Fetched excerpts are still untrusted web content and are evidence candidates, not automatic entailment decisions.
+
+`evidence_must_include` is a mechanical postcondition, not a regex or semantic judge. Matching lowercases both sides, canonicalizes common curly quotes and dash variants, collapses Unicode whitespace and controls, and performs a substring check; `matchedRequiredPhrases` therefore reports the caller-declared phrases, not byte-exact text copied from the page. Use candidate-neutral field labels, action phrases, or date markers that an answer-bearing passage must contain; do not put an expected unknown answer into a query or phrase merely to confirm the model's own guess. For document scope, `scope.must_include` is a page-global document-identity check; every `evidence_must_include` phrase must still occur in the retained excerpt. For event-row scope, `scope.must_include` remains row-local. A document temporal anchor verifies the declared month against the URL or document header. An event-row anchor recognizes ISO dates or full English month names with same-month day ranges, inherits years only from recognized English calendar/event headings or a bare year, rejects rows containing recognized metadata labels, and can select the first successfully parsed event after an exclusive cutoff. This is not a general table parser and does not prove that every upstream event row was parsed. Missing and blocked claim queries are deliberately not repeated in the model-facing result, because tool arguments are not evidence.
+
+`value_kind` adds a bounded value-shape postcondition. The three CVSS modes accept only a concrete assigned version tied to a valid vector or labelled base score, a complete CVSS v3/v4 vector (or explicitly labelled complete v2 vector), or a numeric labelled base score from 0.0 through 10.0 with one concrete version. They deliberately reject NVD's generic version tabs and prose about “vector strings.” This remains a shape check, not independent validation that the publisher calculated the metric correctly.
+
+Queries that explicitly ask for affected, fixed, or patched version/release lists also require a concrete dotted version near a recognized list label such as `Hot Fix Name`, `Patched Versions`, or `Affected Versions`. A cross-reference to a “Fixed Software” section, a software-checker input example, or a sentence that merely recommends a fixed release cannot by itself mark the list covered.
 
 The only cross-origin representation exception is an HTTP 202 from the exact original EUR-Lex English legal-content request with one strict `uri=CELEX:...` value and no other query field. The lane must explicitly allow both `eur-lex.europa.eu` and `publications.europa.eu`; only then can the reader derive the matching official Publications Office `/resource/celex/` resolver. That exact resolver must return HTTP 303 to `http(s)://publications.europa.eu/resource/cellar/<safe-id>/DOC_<n>` with no query or fragment. HTTP is upgraded to HTTPS only in this resolver state, and the exact document must return HTTP 200 `application/xhtml+xml` without another redirect. Both state transitions consume the redirect budget. Generic 202 responses and every other cross-origin or HTTP redirect remain blocked. This retrieves another official representation; it does not prove that the text is the latest consolidated law or that an excerpt entails a legal conclusion.
+
+## Experimental `verified_json_projection`
+
+Use `verified_json_projection` for a canonical JSON object-array when the task needs every strict matching row in source order, rather than a date or numeric extreme. It projects 1-32 scalar string/boolean/null fields from each matching parent row and may project one row-relative nested array with its own strict filters and fields. Both levels retain the original zero-based `sourceIndex`, exact `rowCount` and `matchCount`, and all matches within the shared row/output bounds. It never sorts or infers a latest row.
+
+Pointer handling is bounded and auditable. If the fetched root is already an array and a non-empty `array_pointer` cannot resolve, the tool may use that root array and records `root_array_fallback`. After an exact object-key miss, each segment may repair only one unique ASCII case-insensitive key; ambiguous keys, non-ASCII case guesses, and different effective repairs across inspected rows fail closed. `pointerAudits` and the model-visible `pointer_audits_json` preserve every requested pointer, effective pointer, and repair. Values, filters, ordering, and field aliases are never repaired or inferred.
+
+The tool deliberately rejects numeric equality filters and every projected JSON number because ordinary `JSON.parse` cannot preserve number lexemes beyond IEEE-754 precision. Use `verified_json_numeric_extrema` when numeric comparison or exact numeric projection is required. `complete: true` covers only the selected arrays in the fetched response; it does not prove that an upstream API returned every page or that source order has semantic meaning. Projected strings are rendered completely within the 64 KiB scalar and aggregate output limits rather than silently cropped.
 
 ## Experimental `verified_json_selection`
 
@@ -80,7 +100,23 @@ Use `verified_json_selection` for official machine-readable feeds when a task as
 
 The network reader caps the fetched feed at 2 MiB. The pure selector API additionally caps direct input at 8 MiB, the selected array at 25,000 rows, final ties at 256, each projected scalar at 64 KiB, projected-output construction at 4 MiB, and successful serialized output at 8 MiB. It scans depth, duplicate keys, and Unicode before `JSON.parse` can materialize the document. Invalid JSON, duplicate keys, invalid pointers/dates, missing fields, no match, and limit violations fail closed without a partial success.
 
-`complete: true` and `truncated: false` mean only that the specified operation completed over the fetched decoded UTF-8 JSON and retained all final ties within those limits. `evidenceSha256` hashes those decoded UTF-8 bytes; it is not a signature, raw HTTP-body attestation, publisher authentication, or proof that the feed is complete or factually correct. A semantic flag such as `is_latest=true` should be expressed with `where`; the most recently published row is not automatically the newest product version.
+`complete: true` and `truncated: false` mean only that the specified operation completed over the accepted UTF-8 JSON input and retained all final ties within those limits. `evidenceSha256` hashes the accepted input bytes (the fetched decoded body for the network tool); it is not a signature, raw HTTP-body attestation, publisher authentication, or proof that the feed is complete or factually correct. A semantic flag such as `is_latest=true` should be expressed with `where`; the most recently published row is not automatically the newest product version.
+
+After any successful root structured JSON projection or selection, the same-turn policy leaves only `verified_research` in the next model header and rejects direct dispatch of every other tool. A task may finish immediately or proceed to that single bounded research pass for remaining first-party claims. This is a convergence boundary: it prevents shell, browser, alternate structured-tool, and title/URL-discovery detours between deterministic feed processing and bounded full-page research, but it does not force a research pass when the JSON result already answers the task.
+
+## Experimental `verified_json_numeric_extrema`
+
+Use `verified_json_numeric_extrema` when an official JSON object-array asks for a numeric maximum or minimum and every tied row. It keeps the existing date selector separate and performs a bounded numeric operation:
+
+1. resolve an RFC 6901 `array_pointer` and optional strict `where` filters;
+2. optionally retain rows on or before an inclusive ISO-date cutoff;
+3. compare the JSON number at `extreme.pointer` as its exact source lexeme, without IEEE-754 conversion;
+4. select `direction: "max"` or `"min"` with `ties: "all"`;
+5. project bounded scalar fields, representing every projected JSON number as `{ "jsonNumber": "<exact source lexeme>" }`.
+
+The selector normalizes sign, significant digits, and base-10 scale for comparison, so values such as `1`, `1.0`, and `1e0` tie without discarding their original representations. It fails closed when the running Node runtime cannot expose a number token's source text. Additional bounds cap the number of numeric tokens at 100,000 and each numeric lexeme at 1,024 bytes; the feed, row, tie, projection, depth, and successful-output limits remain bounded as described above.
+
+`ties: "all"` covers only the fetched selected array. It does not prove that an upstream API returned its whole corpus, that pagination was exhausted, or that the publisher's numeric field has the intended unit or semantics. Use `where` and the cutoff to encode those boundaries explicitly, cite `source_url`, and report `retrieved_at`.
 
 ## Install
 
@@ -118,7 +154,7 @@ For a first-party verification pass:
 
 Then run a separate unrestricted query for independent comparisons. The prompt policy instructs the agent not to fill a missing current version with an older substitute.
 
-The plugin reuses `DEEPSEEK_API_KEY` from the Harness credential service or launch environment. Optional bundle configuration fields are `apiKeyEnv`, `apiKey`, `baseURL`, `model`, `apiVersion`, `maxTokens`, `maxUses`, `maxResults`, `searchTimeoutMs`, `researchTimeoutMs`, and `researchMaxResults`. The last two fields only affect the unreleased composite experiment; `researchMaxResults` is constrained to 4–32 and must also be at least the declared claim count for that call.
+The plugin reuses `DEEPSEEK_API_KEY` from the Harness credential service or launch environment. Optional bundle configuration fields are `apiKeyEnv`, `apiKey`, `baseURL`, `model`, `apiVersion`, `maxTokens`, `maxUses`, `maxResults`, `searchTimeoutMs`, `researchTimeoutMs`, and `researchMaxResults`. The last two fields only affect the unreleased composite experiment; `researchMaxResults` defaults to 24, is constrained to 4–32, and must also be at least the declared claim count for that call.
 
 ## Guarantees and limits
 
@@ -133,9 +169,11 @@ This does **not** prove that:
 - a provider-supplied `page_age` is an ISO publication date;
 - a source without a returned citation excerpt supports a claim.
 - a fetched excerpt entails the requested claim merely because query terms occur in it;
+- satisfying every normalized-substring `evidence_must_include` phrase proves entailment, handles negation, or validates an unknown answer value;
+- satisfying a typed `value_kind` proves that a CVSS metric is authoritative or correctly calculated;
 - `allClaimsCovered` proves semantic entailment, freshness, claim-list completeness, or adequate independent corroboration;
 - a caller-selected seed URL is canonical, first-party, or authoritative;
-- a completed JSON selection proves the publisher feed is authentic, complete, current, or factually correct;
+- a completed JSON projection, date selection, or numeric selection proves the publisher feed is authentic, unpaginated, complete, current, correctly ordered, or factually correct;
 - a public page selected from provider results is safe to obey as instructions;
 - the local fetch boundary prevents the upstream provider from independently retrieving other pages.
 
@@ -153,7 +191,7 @@ pnpm run build
 pnpm pack
 ```
 
-Tests cover hostname validation, legacy-IP rejection, credential-safe failures, request-before-dispatch logging, native wire mapping, allowlist postconditions, prompt/schema replacement, execution blocking, seed-first claim coverage, global search-round barriers, abort quiescence, DNS/IP and redirect rejection, the EUR-Lex Cellar exception, bounded text/JSON responses, inert HTML/XHTML normalization, value-bearing excerpt checks, strict JSON selection, all-tie retention, and evidence hashes.
+Tests cover hostname validation, legacy-IP rejection, credential-safe failures, request-before-dispatch logging, native wire mapping, allowlist postconditions, prompt/schema replacement, structured-followup and terminal-tool blocking, seed-first claim coverage, global search-round barriers, abort quiescence, DNS/IP and redirect rejection, fatal UTF-8 plus declared Windows-1252 text, the EUR-Lex Cellar exception, bounded text/JSON responses, inert HTML/XHTML normalization, complete model-visible excerpts, normalized-substring evidence postconditions, bounded row/nested-array JSON projection, strict date and exact-lexeme numeric JSON selection, all-tie retention, and evidence hashes.
 
 Git profile installation can show missing-peer warnings because Harness resolves its own peer packages through the healed profile fallback. The plugin keeps those peers explicit and narrow instead of silently bundling duplicate Harness runtimes. Manual release validation includes installation and HTTP boot from a new temporary `DSH_HOME`; public CI covers locked install, types, tests, prebuilt-artifact consistency, and package contents.
 

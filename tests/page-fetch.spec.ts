@@ -12,10 +12,10 @@ import type {
 
 function response(
   statusCode = 200,
-  body = 'official current model evidence',
+  body: string | Uint8Array = 'official current model evidence',
   headers: Record<string, string> = { 'content-type': 'text/plain' },
 ): TransportResponse {
-  return { statusCode, headers, bytes: new TextEncoder().encode(body) }
+  return { statusCode, headers, bytes: typeof body === 'string' ? new TextEncoder().encode(body) : body }
 }
 
 function transport(
@@ -69,6 +69,42 @@ describe('DNS-pinned evidence fetch policy', () => {
       mediaType: 'text/plain',
       body: 'official current model evidence',
     })
+  })
+
+  it.each(['ISO-8859-1', 'windows-1252'])('decodes Cisco-like %s advisory text as Windows-1252', async (charset) => {
+    const prefix = new TextEncoder().encode('<h1>Cisco Security Advisory</h1><p>Affected Products ')
+    const suffix = new TextEncoder().encode(' ASA and FTD</p>')
+    const bytes = Uint8Array.from([...prefix, 0x96, ...suffix])
+    const fake = transport(undefined, () => response(200, bytes, {
+      'content-type': `text/html;charset=${charset}`,
+    }))
+
+    await expect(fetchEvidencePage('https://example.com/advisory', ['example.com'], undefined, { transport: fake }))
+      .resolves.toMatchObject({
+        mediaType: 'text/html',
+        body: '<h1>Cisco Security Advisory</h1><p>Affected Products – ASA and FTD</p>',
+      })
+  })
+
+  it('keeps declared UTF-8 decoding fatal and rejects unknown charsets', async () => {
+    const utf8Body = '<p>安全更新 — café</p>'
+    const utf8 = transport(undefined, () => response(200, utf8Body, {
+      'content-type': 'text/html; charset="UTF-8"',
+    }))
+    await expect(fetchEvidencePage('https://example.com/utf8', ['example.com'], undefined, { transport: utf8 }))
+      .resolves.toMatchObject({ body: utf8Body })
+
+    const invalidUtf8 = transport(undefined, () => response(200, Uint8Array.from([0xc3, 0x28]), {
+      'content-type': 'text/plain;charset=utf-8',
+    }))
+    await expect(fetchEvidencePage('https://example.com/invalid', ['example.com'], undefined, { transport: invalidUtf8 }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR' })
+
+    const unknown = transport(undefined, () => response(200, 'ASCII is not permission to guess', {
+      'content-type': 'text/html;charset=shift_jis',
+    }))
+    await expect(fetchEvidencePage('https://example.com/unknown', ['example.com'], undefined, { transport: unknown }))
+      .rejects.toMatchObject({ code: 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR' })
   })
 
   it('fails closed when any DNS answer is non-public', async () => {

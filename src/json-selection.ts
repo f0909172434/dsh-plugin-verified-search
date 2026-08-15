@@ -308,6 +308,9 @@ class StrictJsonScanner {
       fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_SELECTION_PARSE_LIMIT_EXCEEDED')
     }
     const character = this.input[this.cursor]
+    if (depth === MAX_JSON_DEPTH && (character === '{' || character === '[')) {
+      fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_SELECTION_PARSE_LIMIT_EXCEEDED')
+    }
     if (character === '{') {
       this.scanObject(depth + 1)
     } else if (character === '[') {

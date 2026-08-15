@@ -18,11 +18,64 @@ export interface VerifiedSearchResult {
   readonly filteredOut: number
 }
 
+export interface VerifiedResearchDocumentTemporalAnchor {
+  readonly kind: 'year_month'
+  readonly role: 'document'
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string
+}
+
+export interface VerifiedResearchEventYearMonthAnchor {
+  readonly kind: 'year_month'
+  readonly role: 'event'
+  /** Strict calendar month in YYYY-MM form. */
+  readonly value: string
+}
+
+export interface VerifiedResearchEventAfterAnchor {
+  readonly kind: 'after'
+  readonly role: 'event'
+  /** Strict exclusive cutoff in YYYY-MM-DD form. */
+  readonly value: string
+  readonly select: 'first'
+}
+
+export type VerifiedResearchTemporalAnchor =
+  | VerifiedResearchDocumentTemporalAnchor
+  | VerifiedResearchEventYearMonthAnchor
+  | VerifiedResearchEventAfterAnchor
+
+export type VerifiedResearchClaimScope =
+  | {
+      readonly kind: 'document'
+      /** Candidate-neutral identity markers required somewhere in the fetched document. */
+      readonly mustInclude: readonly string[]
+      readonly temporalAnchor?: VerifiedResearchDocumentTemporalAnchor
+    }
+  | {
+      readonly kind: 'event_row'
+      /** Candidate-neutral row/section markers required in the retained excerpt. */
+      readonly mustInclude: readonly string[]
+      readonly temporalAnchor: VerifiedResearchEventYearMonthAnchor | VerifiedResearchEventAfterAnchor
+    }
+
+export type VerifiedResearchClaimValueKind =
+  | 'generic_text'
+  | 'cvss_assigned_version'
+  | 'cvss_vector'
+  | 'cvss_base_score'
+
 export interface VerifiedResearchClaim {
   /** Stable caller-chosen identifier used in claim-level coverage reporting. */
   readonly id: string
   /** Exact fact or retrieval terms that require their own fetched-page excerpt. */
   readonly query: string
+  /** Case-insensitive, whitespace-normalized substrings required in the retained excerpt. */
+  readonly evidenceMustInclude: readonly string[]
+  /** Typed value postcondition; omitted direct-API values retain generic-text compatibility. */
+  readonly valueKind?: VerifiedResearchClaimValueKind
+  /** Typed evidence boundary; mandatory for every explicit claim. */
+  readonly scope: VerifiedResearchClaimScope
 }
 
 export interface VerifiedResearchLane {
@@ -68,11 +121,18 @@ export interface VerifiedPageEvidence {
 
 export interface VerifiedClaimEvidence extends VerifiedPageEvidence {
   readonly claimId: string
+  readonly valueKind: VerifiedResearchClaimValueKind
+  /** Caller-declared normalized substrings mechanically matched in this exact excerpt. */
+  readonly matchedRequiredPhrases: readonly string[]
 }
 
 export interface VerifiedResearchClaimResult {
   readonly id: string
   readonly query: string
+  readonly evidenceMustInclude: readonly string[]
+  readonly valueKind: VerifiedResearchClaimValueKind
+  /** Absent only for the deprecated implicit legacy claim. */
+  readonly scope?: VerifiedResearchClaimScope
   readonly status: VerifiedResearchClaimStatus
   readonly evidenceCount: 0 | 1
 }

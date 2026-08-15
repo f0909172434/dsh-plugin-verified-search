@@ -166,6 +166,48 @@ function mediaTypeOf(headers: Readonly<Record<string, string | readonly string[]
   throw new EvidenceFetchError('evidence response used an unsupported content type', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
 }
 
+type SupportedTextEncoding = 'utf-8' | 'windows-1252'
+
+function textEncodingOf(
+  headers: Readonly<Record<string, string | readonly string[] | undefined>>,
+): SupportedTextEncoding {
+  const raw = headerValue(headers, 'content-type')
+  if (raw === undefined) return 'utf-8'
+  let foundCharset = false
+  let encoding: SupportedTextEncoding = 'utf-8'
+  for (const parameter of raw.split(';').slice(1)) {
+    const equals = parameter.indexOf('=')
+    const name = (equals === -1 ? parameter : parameter.slice(0, equals)).trim().toLowerCase()
+    if (name !== 'charset') continue
+    if (foundCharset || equals === -1) {
+      throw new EvidenceFetchError('evidence response declared an invalid charset', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
+    }
+    foundCharset = true
+    let label = parameter.slice(equals + 1).trim()
+    if (label.startsWith('"') || label.endsWith('"')) {
+      if (label.length < 2 || !label.startsWith('"') || !label.endsWith('"')) {
+        throw new EvidenceFetchError('evidence response declared an invalid charset', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
+      }
+      label = label.slice(1, -1).trim()
+    }
+    switch (label.toLowerCase()) {
+      case 'utf-8':
+      case 'utf8':
+        encoding = 'utf-8'
+        break
+      case 'iso-8859-1':
+      case 'windows-1252':
+        // WHATWG treats ISO-8859-1 web content as Windows-1252. Using the
+        // canonical decoder preserves Cisco advisory punctuation in U+0080-009F.
+        encoding = 'windows-1252'
+        break
+      default:
+        throw new EvidenceFetchError('evidence response declared an unsupported charset', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
+    }
+  }
+  return encoding
+}
+
 function requestHeaders(url: URL): Readonly<Record<string, string>> {
   if (url.hostname === 'publications.europa.eu' && url.pathname.startsWith('/resource/')) {
     return {
@@ -520,14 +562,15 @@ export async function fetchEvidencePage(
         throw new EvidenceFetchError('Cellar alternate did not end at its exact representation URL', 'VERIFIED_RESEARCH_FETCH_REDIRECT_ERROR')
       }
       const mediaType = mediaTypeOf(response.headers)
+      const textEncoding = textEncodingOf(response.headers)
       if (cellarState === 'document' && mediaType !== 'application/xhtml+xml') {
         throw new EvidenceFetchError('Cellar alternate did not return application/xhtml+xml', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR')
       }
       let body: string
       try {
-        body = new TextDecoder('utf-8', { fatal: true }).decode(response.bytes)
+        body = new TextDecoder(textEncoding, { fatal: true }).decode(response.bytes)
       } catch (error: unknown) {
-        throw new EvidenceFetchError('evidence response was not valid UTF-8 text', 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR', { cause: error })
+        throw new EvidenceFetchError(`evidence response was not valid ${textEncoding} text`, 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR', { cause: error })
       }
       return {
         url: current.toString(),

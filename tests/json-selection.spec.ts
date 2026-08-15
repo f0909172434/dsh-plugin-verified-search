@@ -267,6 +267,21 @@ describe('bounded strict JSON max-tie selection', () => {
     }
   })
 
+  it('applies the 64-container depth limit equally to empty and populated arrays', () => {
+    const atLimit = `${'['.repeat(63)}0${']'.repeat(63)}`
+    const accepted = selectJsonMaxTies(
+      `{"padding":${atLimit},"vulnerabilities":[{"cveID":"CVE-1","dateAdded":"2026-08-14","vendorProject":"Vendor"}]}`,
+      request,
+    )
+    expect(accepted.tieCount).toBe(1)
+
+    const beyondLimit = `${'['.repeat(64)}${']'.repeat(64)}`
+    expectCode(() => selectJsonMaxTies(
+      `{"padding":${beyondLimit},"vulnerabilities":[{"cveID":"CVE-1","dateAdded":"2026-08-14","vendorProject":"Vendor"}]}`,
+      request,
+    ), 'JSON_SELECTION_PARSE_LIMIT_EXCEEDED')
+  })
+
   it('rejects more than 256 final maximum ties without returning a partial result', () => {
     const input = JSON.stringify({
       vulnerabilities: Array.from({ length: JSON_SELECTION_MAX_TIES + 1 }, (_, index) => ({
