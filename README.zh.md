@@ -112,7 +112,7 @@ dsh web
 測試尚未發布的 v0.3 workflow 時，請固定到已驗證的實驗 commit：
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#6332aabd24e18c2cfe8d32f48ac9f4d781a59515
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#67d337ebb754b51b703df3f690310482c0f2d14d
 dsh --profile web --dump-config
 dsh web
 ```

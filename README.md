@@ -149,7 +149,7 @@ dsh web
 To evaluate the unreleased v0.3 workflow, pin the exact experimental commit rather than installing a moving branch:
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#6332aabd24e18c2cfe8d32f48ac9f4d781a59515
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#67d337ebb754b51b703df3f690310482c0f2d14d
 dsh --profile web --dump-config
 dsh web
 ```
