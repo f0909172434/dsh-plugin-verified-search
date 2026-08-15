@@ -16,7 +16,9 @@
     "lib",
     "cordis.patch.yml",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "README.zh.md",
+    "docs/assets"
   ],
   "scripts": {
     "build": "tsdown",

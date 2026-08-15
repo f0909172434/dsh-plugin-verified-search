@@ -1,10 +1,14 @@
 # dsh-plugin-verified-search
 
+[English](README.md) · [繁體中文](README.zh.md)
+
 An installable DeepSeek Harness plugin for current/latest/as-of searches that need explicit source scope and honest evidence gaps.
 
 This project is the immediately installable companion to [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332). It does not claim that a search index is always current. It makes the retrieval procedure and returned structured-source boundary auditable.
 
-> **Unreleased experiment:** the `experiment/claim-complete-research-v0.3` branch and its `0.3.0-experiment.0` package contain the composite and structured-selection workflows described below. They are not part of the reviewed `v0.1.1` tag used by the installation command in this document.
+![Architecture of the bounded evidence workflow](docs/assets/architecture.svg)
+
+> **Unreleased experiment:** `main` currently carries the `0.3.0-experiment.0` composite and structured-selection workflows described below. They are not part of the reviewed `v0.1.1` release tag used by the stable installation command in this document. Pin a commit when testing unreleased code.
 
 ## What it changes
 
@@ -118,12 +122,34 @@ The selector normalizes sign, significant digits, and base-10 scale for comparis
 
 `ties: "all"` covers only the fetched selected array. It does not prove that an upstream API returned its whole corpus, that pagination was exhausted, or that the publisher's numeric field has the intended unit or semantics. Use `where` and the cutoff to encode those boundaries explicitly, cite `source_url`, and report `retrieved_at`.
 
+## Observed evaluation
+
+![Observed completion improvement on two difficult official-source tasks](docs/assets/benchmark.svg)
+
+The current experiment was exercised on two different difficult searches with frozen requested-field ledgers:
+
+| Task | Before the fixes | Current experiment | Terminal time |
+| --- | ---: | ---: | ---: |
+| Go supported releases, security scope, and Linux artifact provenance | 0/8 | **8/8** | 317 s |
+| EU AI Act amended timeline and GPAI transition dates | 0/8 | **6/8** | 307 s |
+| **Combined** | **0/16** | **14/16 (87.5%)** | — |
+
+All 14 answered requested fields were grounded in retained official-source evidence, and no unsupported requested field was asserted. The two unresolved EU fields were reported as unresolved. The earlier stock rc.6 runs also reached the 240-second outer limit without a terminal answer, while the current runs required more than 240 seconds. These are single observed runs under a 600-second outer cap—not a standardized benchmark, statistical estimate, or production latency target.
+
 ## Install
 
-Install the reviewed release tag:
+Install the reviewed stable release tag:
 
 ```powershell
 dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
+dsh --profile web --dump-config
+dsh web
+```
+
+To evaluate the unreleased v0.3 workflow, pin the exact experimental commit rather than installing a moving branch:
+
+```powershell
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#6332aabd24e18c2cfe8d32f48ac9f4d781a59515
 dsh --profile web --dump-config
 dsh web
 ```
