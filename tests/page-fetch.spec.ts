@@ -86,6 +86,17 @@ describe('DNS-pinned evidence fetch policy', () => {
       })
   })
 
+  it('uses the same complete Windows-1252 C1 mapping on every supported Node runtime', async () => {
+    const fake = transport(undefined, () => response(200, Uint8Array.from([
+      0x80, 0x20, 0x81, 0x20, 0x8d, 0x20, 0x96, 0x20, 0x9f,
+    ]), {
+      'content-type': 'text/plain;charset=windows-1252',
+    }))
+
+    await expect(fetchEvidencePage('https://example.com/mapping', ['example.com'], undefined, { transport: fake }))
+      .resolves.toMatchObject({ body: '€ \u0081 \u008d – Ÿ' })
+  })
+
   it('keeps declared UTF-8 decoding fatal and rejects unknown charsets', async () => {
     const utf8Body = '<p>安全更新 — café</p>'
     const utf8 = transport(undefined, () => response(200, utf8Body, {

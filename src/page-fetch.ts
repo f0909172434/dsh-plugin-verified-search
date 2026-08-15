@@ -168,6 +168,19 @@ function mediaTypeOf(headers: Readonly<Record<string, string | readonly string[]
 
 type SupportedTextEncoding = 'utf-8' | 'windows-1252'
 
+const WINDOWS_1252_C1 = [
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+  0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+  0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+] as const
+
+/** Deterministic WHATWG-compatible mapping for Node 22 builds with incomplete ICU data. */
+function decodeWindows1252(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('latin1').replace(/[\u0080-\u009f]/gu, character =>
+    String.fromCodePoint(WINDOWS_1252_C1[character.charCodeAt(0) - 0x80]!))
+}
+
 function textEncodingOf(
   headers: Readonly<Record<string, string | readonly string[] | undefined>>,
 ): SupportedTextEncoding {
@@ -568,7 +581,9 @@ export async function fetchEvidencePage(
       }
       let body: string
       try {
-        body = new TextDecoder(textEncoding, { fatal: true }).decode(response.bytes)
+        body = textEncoding === 'windows-1252'
+          ? decodeWindows1252(response.bytes)
+          : new TextDecoder('utf-8', { fatal: true }).decode(response.bytes)
       } catch (error: unknown) {
         throw new EvidenceFetchError(`evidence response was not valid ${textEncoding} text`, 'VERIFIED_RESEARCH_FETCH_CONTENT_ERROR', { cause: error })
       }
