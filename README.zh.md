@@ -6,7 +6,7 @@
 
 本專案是 [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) 的可部署配套。它不宣稱搜尋索引永遠最新，也不把模型生成的摘要當成證據；它讓搜尋流程、來源邊界、擷取內容與未解欄位都可以被稽核。
 
-![有界證據工作流程架構](docs/assets/architecture.svg)
+![有界證據工作流程架構](docs/assets/architecture.zh.svg)
 
 > **尚未發布的實驗版本：** `main` 目前包含 `0.3.0-experiment.0` 的複合研究與結構化 JSON 工具。這些功能不屬於已審查的 `v0.1.1` 穩定標籤。測試未發布程式碼時，請固定到明確 commit，不要依賴會移動的分支。
 
@@ -87,7 +87,7 @@ Provider snippet 只用於 discovery，不能升格為已驗證證據。
 
 ## 實測結果
 
-![兩個困難官方來源任務的完成率變化](docs/assets/benchmark.svg)
+![兩個困難官方來源任務的完成率變化](docs/assets/benchmark.zh.svg)
 
 這輪以兩個不同領域、預先凍結 requested-field ledger 的困難搜尋測試目前版本：
 

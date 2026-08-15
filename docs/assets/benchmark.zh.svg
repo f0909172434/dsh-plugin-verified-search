@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="530" viewBox="0 0 1200 530" role="img" aria-labelledby="title desc">
+  <title id="title">困難搜尋任務的實測完成率提升</title>
+  <desc id="desc">修正前的 600 秒實驗完成十六個欄位中的零個；目前版本完成十四個，其中 Go 任務八個全數完成，EU AI Act 任務完成八個中的六個。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5f9fc"/><stop offset="1" stop-color="#e9f4f4"/></linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#13a88a"/><stop offset="1" stop-color="#2f80ed"/></linearGradient>
+    <style>
+      .title{font:700 29px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#102a43}.sub{font:400 15px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#526d82}.label{font:700 18px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#17324d}.value{font:800 25px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#102a43}.note{font:500 14px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#526d82}.axis{stroke:#b9ccda;stroke-width:1}.tick{font:500 13px Inter,"Microsoft JhengHei","Noto Sans TC",Segoe UI,sans-serif;fill:#6c8295}
+    </style>
+  </defs>
+  <rect width="1200" height="530" rx="24" fill="url(#bg)"/>
+  <text x="58" y="58" class="title">兩個困難一手來源任務的實測完成率</text>
+  <text x="58" y="84" class="sub">保留證據支持的 requested fields · 每種設定單次觀測 · 外層上限 600 秒</text>
+
+  <line x1="305" y1="124" x2="305" y2="362" class="axis"/>
+  <line x1="505" y1="124" x2="505" y2="362" class="axis"/>
+  <line x1="705" y1="124" x2="705" y2="362" class="axis"/>
+  <line x1="905" y1="124" x2="905" y2="362" class="axis"/>
+  <line x1="1105" y1="124" x2="1105" y2="362" class="axis"/>
+  <text x="298" y="385" class="tick">0</text><text x="497" y="385" class="tick">4</text><text x="697" y="385" class="tick">8</text><text x="892" y="385" class="tick">12</text><text x="1092" y="385" class="tick">16</text>
+
+  <text x="58" y="166" class="label">修正前實驗</text>
+  <rect x="305" y="137" width="800" height="42" rx="12" fill="#d9e3ea"/>
+  <rect x="305" y="137" width="5" height="42" rx="3" fill="#9aaebd"/>
+  <text x="325" y="166" class="value">0 / 16</text>
+
+  <text x="58" y="246" class="label">目前實驗版本</text>
+  <rect x="305" y="217" width="800" height="42" rx="12" fill="#d9e3ea"/>
+  <rect x="305" y="217" width="700" height="42" rx="12" fill="url(#bar)"/>
+  <text x="1020" y="246" class="value">14 / 16</text>
+
+  <text x="58" y="326" class="label">任務拆分</text>
+  <rect x="305" y="297" width="400" height="42" rx="12" fill="#13a88a"/>
+  <rect x="705" y="297" width="300" height="42" rx="12" fill="#2f80ed"/>
+  <rect x="1005" y="297" width="100" height="42" rx="12" fill="#d9e3ea"/>
+  <text x="435" y="325" class="value" fill="#fff">Go 8 / 8</text>
+  <text x="785" y="325" class="value" fill="#fff">EU 6 / 8</text>
+
+  <rect x="58" y="420" width="1084" height="70" rx="15" fill="#fff" stroke="#cadbe6"/>
+  <text x="80" y="449" class="note">已回答 requested fields 的證據精度：14 / 14（100%）。無證據 requested assertions：0。</text>
+  <text x="80" y="473" class="note">延遲仍高：Go 317 秒；EU 307 秒。本結果不是標準化 benchmark 或 production SLO。</text>
+</svg>
