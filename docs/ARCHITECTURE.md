@@ -44,6 +44,7 @@ src/provider.ts
 src/page-fetch.ts
 src/evidence.ts
 src/json-primitives.ts
+src/json-lossless-number.ts
 src/json-selection.ts
 src/json-numeric-selection.ts
 src/json-projection.ts
@@ -57,8 +58,13 @@ Cordis lifecycle packages.
 `json-primitives.ts` owns the bounded strict-JSON scanner, UTF-8 and Unicode input checks,
 RFC 6901 pointer parsing, and Gregorian/UTC date normalization. Callers provide the failure
 adapter, so the shared implementation does not replace each public tool's stable error-code
-vocabulary. `json-selection.ts` is the first migrated consumer; numeric selection and strict
-projection remain separate follow-up extractions.
+vocabulary.
+
+`json-lossless-number.ts` builds on that strict scanner and owns exact source-token number
+representation, token and lexeme limits, normalization, and decimal comparison without
+IEEE-754 conversion or decimal expansion. `json-selection.ts` and
+`json-numeric-selection.ts` now consume the extracted engines while retaining their own
+public result and error contracts. Strict projection remains the next JSON migration.
 
 `provider.ts` belongs here because it owns the provider wire contract and sanitization rather
 than plugin registration. `page-fetch.ts` may call that sanitization, but neither module may
@@ -126,13 +132,18 @@ The remaining baseline measurements were recorded at main commit
 | `research.ts` | 66,102 | 67,000 | 20,000 | request normalization, then lane execution |
 | `evidence.ts` | 43,903 | 45,000 | 20,000 | HTML/text normalization |
 | `json-projection.ts` | 31,362 | 32,000 | 20,000 | adopt shared parsing, then repair-aware resolution |
-| `json-numeric-selection.ts` | 29,228 | 30,000 | 20,000 | adopt shared parsing while retaining lossless numbers |
 | `offline-evaluation.ts` | 24,859 | 26,000 | 20,000 | corpus parsing/integrity |
 | `page-fetch.ts` | 24,821 | 26,000 | 20,000 | address policy and transport state |
 
 The first extraction reduced `json-selection.ts` from its 24,306-byte baseline to 17,755
-bytes and moved 9,468 bytes of reusable parsing policy into `json-primitives.ts`. Both files
-now satisfy the default budget, so the date selector's temporary exception has been removed.
+bytes and moved 9,468 bytes of reusable parsing policy into `json-primitives.ts`.
+
+The second extraction reduced `json-numeric-selection.ts` from its 29,228-byte baseline to
+19,617 bytes and moved 5,475 bytes of lossless token parsing and comparison into
+`json-lossless-number.ts`. All four JSON modules named in these two extractions are now below
+the default budget, so the date and numeric selector exceptions have been removed. Five
+growth stops remain.
+
 A feature PR may not increase any remaining ceiling. If necessary work would cross a ceiling,
 the required extraction is part of that PR or precedes it in a separate PR.
 
@@ -140,10 +151,11 @@ the required extraction is part of that PR or precedes it in a separate PR.
 
 The staged order is chosen to reduce duplicated correctness logic before moving orchestration:
 
-1. **Shared strict JSON primitives — in progress.** The bounded scanner, input decoding,
-   RFC 6901 parsing, and ISO-date normalization now live in `json-primitives.ts`, and the date
-   selector uses them without changing its public errors. Migrate numeric selection next,
-   then projection, while retaining exact-number and pointer-repair semantics.
+1. **Shared JSON parsing engines — in progress.** The bounded scanner, input decoding,
+   RFC 6901 parsing, and ISO-date normalization live in `json-primitives.ts`. Exact source
+   number tokens and decimal comparison live in `json-lossless-number.ts`. Date and numeric
+   selectors use these engines without changing their public errors. Migrate projection next
+   while retaining pointer-repair audit semantics.
 2. **Research request normalization.** Move input validation and normalized claim/lane types
    out of `research.ts` without changing tool schemas or network behavior.
 3. **Research lane execution.** Separate bounded search/fetch work from aggregation and
