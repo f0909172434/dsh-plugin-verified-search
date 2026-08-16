@@ -36,8 +36,8 @@ warning while continuing to enforce freshness, nonzero test count, and failure/e
 
 ## Stage 2 — baseline freeze
 
-The committed `.honest-ci/baseline.json` candidate is derived only from a completed
-post-merge `main` run:
+The committed `.honest-ci/baseline.json` is derived only from a completed post-merge `main`
+run:
 
 | Field | Bound value |
 | --- | --- |
@@ -58,9 +58,36 @@ coarse enough to permit small reviewed test reorganizations while blocking a los
 one tenth of the suite. Any intentional reduction must update the baseline in a separate PR
 whose rationale identifies removed behavior and the source default-branch evidence.
 
-The baseline PR itself cannot lower its own trusted comparison: on pull requests, HonestCI
-reads the baseline from the base commit through the GitHub API. Activation is confirmed only
-when the subsequent `main` run reports `baselineTests: 222` and `dropPercent: 0`.
+The baseline PR itself could not lower its own trusted comparison: on pull requests, HonestCI
+read the baseline from the base commit through the GitHub API.
+
+## Stage 3 — activation confirmation
+
+The first `main` run containing the committed baseline completed successfully on every
+supported CI entry and produced the following independent activation evidence:
+
+| Field | Activated value |
+| --- | --- |
+| Activated commit | `f21009100b8d0f1de94dc4e934cbf1d66009dc96` |
+| Workflow run | `31932149983` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| Result status | `passed` |
+| Observed totals | 222 tests, 0 failures, 0 errors, 0 skipped |
+| Trusted baseline | 222 tests |
+| Observed drop | 0% |
+| Findings | none |
+| GitHub artifact ID | `9259604206` |
+| GitHub artifact digest | `sha256:faf1b3c5892cfa0b81d74122c61675c82953530472f3dcb648e8401322b23c49` |
+| JUnit SHA-256 | `48ad12ea2618fbfa7ee910e0bf00d66f60a36082569449752df298f0ab9eeca6` |
+| Evidence JSON SHA-256 | `e1087b088b63447313566a2291a8c2e8e8052b97436ae7b2e37a4388f39d726c` |
+| Baseline artifact SHA-256 | `f5a30e46ad1ed3f27e61d620e2b532b205d1ca220888b13803fe3e1db8fb74d6` |
+| Evidence creation time | `2026-08-16T06:45:07.196Z` |
+
+This closes the rollout loop: the baseline was derived from an earlier completed default-
+branch run, committed separately, and then exercised by a later default-branch run. Future
+pull requests now compare against the committed 222-test baseline instead of merely checking
+for a nonempty report.
 
 ## Why only the primary job is wrapped
 
