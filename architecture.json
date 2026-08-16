@@ -34,6 +34,7 @@
       "purpose": "Bounded deterministic provider, fetch, evidence, JSON-selection, and offline-evaluation engines without Harness lifecycle dependencies.",
       "files": [
         "src/evidence.ts",
+        "src/json-lossless-number.ts",
         "src/json-numeric-selection.ts",
         "src/json-primitives.ts",
         "src/json-projection.ts",
@@ -98,15 +99,6 @@
       "reason": "HTML normalization, text extraction, claim attribution, and excerpt assembly are still colocated.",
       "next_extraction": "Extract HTML/text normalization before adding another media or attribution strategy.",
       "removal_condition": "Remove this exception when every resulting production module is at or below the default module budget."
-    },
-    {
-      "path": "src/json-numeric-selection.ts",
-      "baseline_bytes": 29228,
-      "max_bytes": 30000,
-      "target_bytes": 20000,
-      "reason": "Lossless number scanning, exact decimal comparison, request validation, and selection remain in one engine.",
-      "next_extraction": "Adopt the shared strict-JSON and RFC 6901 primitives without weakening module-specific error codes.",
-      "removal_condition": "Remove this exception after shared primitives are adopted and the selector is within the default budget."
     },
     {
       "path": "src/json-projection.ts",
