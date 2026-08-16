@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-16T06:39:50.594Z",
+  "reports": {
+    "unit": {
+      "tests": 222,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  }
+}
