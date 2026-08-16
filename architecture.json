@@ -105,8 +105,8 @@
       "baseline_bytes": 31362,
       "max_bytes": 32000,
       "target_bytes": 20000,
-      "reason": "Strict parsing, pointer repair audits, nested projection, and output budgeting are still colocated.",
-      "next_extraction": "Adopt shared strict-JSON primitives, then isolate repair-aware pointer resolution and nested projection.",
+      "reason": "Shared strict JSON parsing is delegated to json-primitives.ts; repair-aware pointer audits, nested projection, and output budgeting remain colocated.",
+      "next_extraction": "Isolate repair-aware pointer resolution, repair audit construction, nested source-order projection, and construction budgeting.",
       "removal_condition": "Remove this exception when the projection engine and extracted modules each satisfy the default budget."
     },
     {
