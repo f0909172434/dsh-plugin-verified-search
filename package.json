@@ -10,16 +10,22 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./capabilities.json": "./capabilities.json",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "capabilities.json",
     "cordis.patch.yml",
     "LICENSE",
     "README.md",
     "README.zh.md",
     "README.zh-CN.md",
-    "docs/assets"
+    "CHANGELOG.md",
+    "MAINTENANCE.md",
+    "docs/assets",
+    "docs/COMPATIBILITY.md",
+    "docs/capabilities.schema.json"
   ],
   "scripts": {
     "build": "tsdown",
