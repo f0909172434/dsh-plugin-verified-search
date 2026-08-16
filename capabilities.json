@@ -1,0 +1,78 @@
+{
+  "$schema": "./docs/capabilities.schema.json",
+  "schema_version": "1.0.0",
+  "package": {
+    "name": "dsh-plugin-verified-search",
+    "main_version": "0.3.0-experiment.0",
+    "main_status": "unreleased_experiment",
+    "reviewed_release": {
+      "tag": "v0.1.1",
+      "package_version": "0.1.1",
+      "tools": [
+        "verified_search"
+      ]
+    }
+  },
+  "maintainer_model": "single_maintainer",
+  "runtime_contract": {
+    "node": [
+      "22.19.x",
+      "24.x"
+    ],
+    "package_manager": "pnpm@10.28.2",
+    "ci_operating_systems": [
+      "ubuntu-latest",
+      "windows-latest"
+    ]
+  },
+  "upstream_contract": {
+    "cordis": "4.0.1",
+    "deepseek_harness": "0.1.0-rc.6",
+    "compatibility_kind": "exact_peer_contract"
+  },
+  "model_facing_tools": [
+    {
+      "name": "verified_search",
+      "lifecycle": "reviewed_release",
+      "first_reviewed_release": "v0.1.1",
+      "main_installation": true,
+      "removal_condition": "Remove only in a major release or when DeepSeek Harness provides an equivalent bounded replacement with a documented migration path."
+    },
+    {
+      "name": "verified_research",
+      "lifecycle": "experimental",
+      "first_main_version": "0.3.0-experiment.0",
+      "main_installation": true,
+      "removal_condition": "Remove or redesign if a frozen evaluation corpus does not show a material evidence-coverage benefit over verified_search, or if the same-turn policy cannot remain compatible with supported Harness versions."
+    },
+    {
+      "name": "verified_json_selection",
+      "lifecycle": "experimental",
+      "first_main_version": "0.3.0-experiment.0",
+      "main_installation": true,
+      "removal_condition": "Remove if official-feed tasks cannot be expressed without source-specific exceptions or if exact bounded selection cannot be maintained across supported Node runtimes."
+    },
+    {
+      "name": "verified_json_numeric_extrema",
+      "lifecycle": "experimental",
+      "first_main_version": "0.3.0-experiment.0",
+      "main_installation": true,
+      "removal_condition": "Remove if exact number-token source text is unavailable on a supported runtime or differential tests expose unresolved comparison divergence."
+    },
+    {
+      "name": "verified_json_projection",
+      "lifecycle": "experimental",
+      "first_main_version": "0.3.0-experiment.0",
+      "main_installation": true,
+      "removal_condition": "Remove if bounded strict projection cannot stay source-order preserving or pointer repair requires source-specific heuristics."
+    }
+  ],
+  "non_goals": [
+    "hosted search service",
+    "general web browser",
+    "arbitrary program execution",
+    "unbounded autonomous research loop",
+    "publisher truth certification",
+    "support for every model provider or Harness release"
+  ]
+}
