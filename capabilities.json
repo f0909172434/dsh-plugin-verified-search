@@ -67,6 +67,18 @@
       "removal_condition": "Remove if bounded strict projection cannot stay source-order preserving or pointer repair requires source-specific heuristics."
     }
   ],
+  "evaluation_contract": {
+    "corpus_id": "verified-search-offline-v1",
+    "manifest": "evaluation/manifest.json",
+    "case_count": 42,
+    "network_access_required": false,
+    "capability_case_counts": {
+      "domain_filter": 11,
+      "json_date_selection": 10,
+      "json_numeric_selection": 10,
+      "json_projection": 11
+    }
+  },
   "non_goals": [
     "hosted search service",
     "general web browser",
