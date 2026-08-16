@@ -24,14 +24,14 @@
       "capability": "json_numeric_selection",
       "caseCount": 10,
       "file": "numeric-selection-v1.json",
-      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "sha256": "sha256:2cb9e5fad33f1613af3693a9f6a85dc0e3c164c321039a0f42d0c7d8d3c38535",
       "suiteId": "numeric-selection-v1"
     },
     {
       "capability": "json_projection",
       "caseCount": 11,
       "file": "projection-v1.json",
-      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "sha256": "sha256:0de2bcdad33df28c289e368f6586c6677e2033f291e7f52039cb01130ceefa5d",
       "suiteId": "projection-v1"
     }
   ]
