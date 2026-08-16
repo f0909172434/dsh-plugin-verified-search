@@ -28,6 +28,7 @@
     "docs/COMPATIBILITY.md",
     "docs/HONEST_CI_DOGFOOD.md",
     "docs/OFFLINE_EVALUATION.md",
+    "docs/PROPERTY_TESTING.md",
     "docs/capabilities.schema.json"
   ],
   "scripts": {
