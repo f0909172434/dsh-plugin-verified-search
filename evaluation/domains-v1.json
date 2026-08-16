@@ -1,0 +1,226 @@
+{
+  "$schema": "./suite.schema.json",
+  "capability": "domain_filter",
+  "cases": [
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": [
+              "example.com",
+              "api.example.com"
+            ],
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-normalize-lowercase-dedupe",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          "Example.COM",
+          "example.com",
+          "API.Example.COM"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": [
+              "xn--bcher-kva.example"
+            ],
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-normalize-punycode",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          "xn--bcher-kva.example"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "code": "VERIFIED_SEARCH_INVALID_FILTER",
+        "status": "error"
+      },
+      "id": "domains-reject-whitespace",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          " example.com"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "code": "VERIFIED_SEARCH_INVALID_FILTER",
+        "status": "error"
+      },
+      "id": "domains-reject-scheme",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          "https://example.com"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "code": "VERIFIED_SEARCH_INVALID_FILTER",
+        "status": "error"
+      },
+      "id": "domains-reject-ipv4",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          "127.0.0.1"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "code": "VERIFIED_SEARCH_INVALID_FILTER",
+        "status": "error"
+      },
+      "id": "domains-reject-single-label",
+      "operation": "normalize_domains",
+      "payload": {
+        "values": [
+          "localhost"
+        ]
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": true,
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-match-exact",
+      "operation": "source_matches_domain",
+      "payload": {
+        "domain": "example.com",
+        "sourceUrl": "https://example.com/path"
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": true,
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-match-subdomain",
+      "operation": "source_matches_domain",
+      "payload": {
+        "domain": "example.com",
+        "sourceUrl": "https://docs.api.example.com/path"
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": false,
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-reject-lookalike",
+      "operation": "source_matches_domain",
+      "payload": {
+        "domain": "example.com",
+        "sourceUrl": "https://example.com.evil.test/path"
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": false,
+            "pointer": ""
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-reject-credentials",
+      "operation": "source_matches_domain",
+      "payload": {
+        "domain": "example.com",
+        "sourceUrl": "https://user:pass@example.com/path"
+      }
+    },
+    {
+      "capability": "domain_filter",
+      "expected": {
+        "assertions": [
+          {
+            "equals": 2,
+            "pointer": "/filteredOut"
+          },
+          {
+            "equals": "exact",
+            "pointer": "/sources/0/label"
+          },
+          {
+            "equals": "subdomain",
+            "pointer": "/sources/1/label"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "domains-filter-mixed",
+      "operation": "filter_allowed_sources",
+      "payload": {
+        "allowedDomains": [
+          "example.com"
+        ],
+        "sources": [
+          {
+            "label": "exact",
+            "url": "https://example.com/a"
+          },
+          {
+            "label": "subdomain",
+            "url": "https://docs.example.com/b"
+          },
+          {
+            "label": "lookalike",
+            "url": "https://example.com.evil.test/c"
+          },
+          {
+            "label": "wrong-protocol",
+            "url": "ftp://example.com/d"
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": "1.0.0",
+  "suiteId": "domain-filter-v1"
+}
