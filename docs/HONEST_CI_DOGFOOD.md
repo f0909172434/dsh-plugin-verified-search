@@ -34,9 +34,9 @@ The gate requires:
 The rollout initially had no baseline. HonestCI reported `HCI101_BASELINE_MISSING` as a
 warning while continuing to enforce freshness, nonzero test count, and failure/error checks.
 
-## Stage 2 — baseline freeze
+## Stage 2 — initial baseline freeze
 
-The committed `.honest-ci/baseline.json` is derived only from a completed post-merge `main`
+The initial `.honest-ci/baseline.json` was derived only from a completed post-merge `main`
 run:
 
 | Field | Bound value |
@@ -53,18 +53,15 @@ run:
 | Evidence JSON SHA-256 | `8e982e7b80fa3b2a9d0d9aad8810509f38eeb1d930c787944853dc170cc9e2b2` |
 | Evidence creation time | `2026-08-16T06:39:50.594Z` |
 
-The baseline records 222 tests. The initial `max_drop_percent: 10` tolerance is intentionally
+The initial baseline recorded 222 tests. The `max_drop_percent: 10` tolerance is intentionally
 coarse enough to permit small reviewed test reorganizations while blocking a loss of roughly
 one tenth of the suite. Any intentional reduction must update the baseline in a separate PR
 whose rationale identifies removed behavior and the source default-branch evidence.
 
-The baseline PR itself could not lower its own trusted comparison: on pull requests, HonestCI
-read the baseline from the base commit through the GitHub API.
+## Stage 3 — initial activation confirmation
 
-## Stage 3 — activation confirmation
-
-The first `main` run containing the committed baseline completed successfully on every
-supported CI entry and produced the following independent activation evidence:
+The first `main` run containing the initial baseline completed successfully on every supported
+CI entry:
 
 | Field | Activated value |
 | --- | --- |
@@ -84,10 +81,34 @@ supported CI entry and produced the following independent activation evidence:
 | Baseline artifact SHA-256 | `f5a30e46ad1ed3f27e61d620e2b532b205d1ca220888b13803fe3e1db8fb74d6` |
 | Evidence creation time | `2026-08-16T06:45:07.196Z` |
 
-This closes the rollout loop: the baseline was derived from an earlier completed default-
-branch run, committed separately, and then exercised by a later default-branch run. Future
-pull requests now compare against the committed 222-test baseline instead of merely checking
-for a nonempty report.
+## Stage 4 — baseline revision after corpus and property testing
+
+The frozen offline corpus and fixed-seed property suites increased the durable test contract
+from 222 to 237 tests. The revised baseline is derived from the first completed `main` run
+containing both increments:
+
+| Field | Revised value |
+| --- | --- |
+| Source commit | `c059362f45ccf21359be6d3e360a0fb6a0266323` |
+| Workflow run | `31934602305` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| HonestCI | `1.0.4` at `4ee4e30b283c219ff42e75606e692f34c91ba826` |
+| Observed totals | 237 tests, 0 failures, 0 errors, 0 skipped |
+| Previous trusted baseline | 222 tests |
+| Findings | none |
+| GitHub artifact ID | `9260272616` |
+| GitHub artifact digest | `sha256:18e8925e127ca190581a525168840bf3507908f913b5af0a270fed1df65b60ab` |
+| JUnit SHA-256 | `c9d8105988c061dafdc7a40d7116ea77214111646b69f8ee64efe5290ebb4b67` |
+| Evidence JSON SHA-256 | `92fdbeb9d8950de94ccae04df8c4863f400fa9b00b76667fcf48e284f279bd0a` |
+| Revised baseline SHA-256 | `8057178b42a56ac9ac51a9e95146df0a4730e63933966717deecc9b710b63faa` |
+| Evidence creation time | `2026-08-16T07:43:33.691Z` |
+
+The baseline revision PR cannot use its own 237-test file to weaken the comparison. On pull
+requests, HonestCI reads `.honest-ci/baseline.json` from the base commit, so this revision is
+still evaluated against 222. A later default-branch run must activate and independently
+confirm the 237-test baseline before the revision loop is considered closed.
 
 ## Why only the primary job is wrapped
 

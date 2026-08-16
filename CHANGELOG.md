@@ -12,8 +12,9 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   conformance.
 - HonestCI `v1.0.4` dogfood gate on the primary test job, with retained JUnit and evidence
   artifacts.
-- A 222-test HonestCI baseline derived from completed default-branch run `31931938350`, with
-  its source commit, artifact digest, and report hashes recorded in the dogfood contract.
+- An initial 222-test HonestCI baseline derived from completed default-branch run
+  `31931938350`, with its source commit, artifact digest, and report hashes recorded in the
+  dogfood contract.
 - Frozen `verified-search-offline-v1` evaluation corpus with 42 hash-bound positive and
   negative cases for domain filtering, date selection, exact-number selection, and strict
   projection.
@@ -24,6 +25,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   date selection, and exact decimal extrema.
 - Independent date and decimal reference implementations that do not call the corresponding
   production selectors.
+- A revised 237-test HonestCI baseline derived from completed default-branch run
+  `31934602305`, after the offline corpus and property suites were merged.
 
 ### Changed
 
@@ -33,9 +36,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   cancelled, and package-only checks run once instead of on every compatibility entry.
 - Local JUnit, evaluation reports, and transient HonestCI evidence outputs are ignored while
   reviewed baselines and corpus files remain committed.
-- The HonestCI baseline is active: default-branch run `31932149983` observed 222 tests against
-  a 222-test baseline with zero drop, no failures/errors/skips, and no findings across a fully
-  successful Ubuntu/Windows compatibility run.
+- The initial HonestCI baseline was activated by default-branch run `31932149983`, which
+  observed 222 tests against 222 with zero drop and no findings.
+- The baseline contract now records 237 tests from main commit
+  `c059362f45ccf21359be6d3e360a0fb6a0266323`; a subsequent default-branch run must activate
+  this revision before the update loop is considered closed.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
   per-capability counts, and offline execution boundary.
 - Property failures now include a replayable hexadecimal seed and iteration number; generator
