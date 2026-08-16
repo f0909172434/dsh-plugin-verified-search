@@ -38,6 +38,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   depth scanning, bounded RFC 6901 parsing, and Gregorian/UTC date normalization.
 - Direct behavior tests for the shared primitive failure boundary, pointer decoding, date
   validation, strict parsing, UTF-8 decoding, and caller-provided limits.
+- A 246-test HonestCI baseline candidate derived from completed default-branch run
+  `31938769457` after the strict-JSON primitive extraction added four durable behavior tests.
 
 ### Changed
 
@@ -52,10 +54,13 @@ This project separates reviewed releases from unreleased experiments. Dates use 
 - The 237-test baseline was activated by default-branch run `31934852209`, which observed 237
   tests against 237 with zero failures, errors, skipped tests, test-count drop, or findings
   across Ubuntu and Windows on Node 22.19 and 24.
-- The 242-test baseline is active: default-branch run `31936229233` observed 242 tests against
-  242 with zero failures, errors, skipped tests, test-count drop, or findings across Ubuntu
-  and Windows on Node 22.19 and 24.
-- The same activation run reproduced all 42 offline cases with result digest
+- The 242-test baseline was activated by default-branch run `31936229233`, which observed 242
+  tests against 242 with zero failures, errors, skipped tests, test-count drop, or findings
+  across Ubuntu and Windows on Node 22.19 and 24.
+- The strict-JSON refactor run observed 246 tests against the prior 242-test baseline with zero
+  failures, errors, skipped tests, drop, or findings; activation of the new baseline remains
+  subject to a later default-branch confirmation.
+- The same refactor run reproduced all 42 offline cases with result digest
   `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
   per-capability counts, offline execution boundary, and source architecture contract.

@@ -1,6 +1,6 @@
 # HonestCI dogfood rollout
 
-This repository uses HonestCI as an internal consumer rather than presenting the integration
+This project uses HonestCI as an internal consumer rather than presenting the integration
 as external adoption. The purpose is to make the primary green test job depend on fresh,
 parseable JUnit evidence and to preserve a machine-readable evidence bundle for later audit.
 
@@ -203,6 +203,40 @@ the revision loop:
 Future pull requests now compare against the active 242-test baseline. The architecture tests
 remain ordinary tests rather than a separate green badge, so removing or bypassing them must
 also reduce the observed count or change the source-architecture contract.
+
+## Stage 8 — strict-JSON primitive baseline revision
+
+The shared strict-JSON primitive extraction added four direct behavior tests while preserving
+the frozen 42-case offline result. The 246-test baseline candidate is derived only from the
+completed post-merge `main` run for the refactor:
+
+| Field | Revised value |
+| --- | --- |
+| Source commit | `7ede47e60236cf105039204de316e324f719b24a` |
+| Workflow run | `31938769457` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| HonestCI | `1.0.4` at `4ee4e30b283c219ff42e75606e692f34c91ba826` |
+| Observed totals | 246 tests, 0 failures, 0 errors, 0 skipped |
+| Previous trusted baseline | 242 tests |
+| Observed drop | 0% |
+| Findings | none |
+| GitHub artifact ID | `9261421310` |
+| GitHub artifact digest | `sha256:e79ae8d1f69509f21b0850d973a9c15b7b26dbbc70d98f5b90cb015b935684e8` |
+| JUnit SHA-256 | `b95c55497f1aaa2159221b16f75d05824099451deac97cebab4c8b33b6af6038` |
+| Evidence JSON SHA-256 | `56a5be35f097511488f5baa89bfd9ab72535f607612eaf537497a317460bd9e7` |
+| Previous baseline artifact SHA-256 | `0e31e3803eae139932b9b5c16c53ba071f8f1084793af7c2b6a79f1cbbf63247` |
+| New baseline SHA-256 | `3a14a6acb9df71166832475f3685bab07e94b6ceca8e91e5309bec1d63c9ae55` |
+| Evidence creation time | `2026-08-16T09:20:36.930Z` |
+| Offline report artifact ID | `9261422009` |
+| Offline artifact digest | `sha256:04eba40df151ed32cafb35f2e0f8c04d2e7ba8b26cc133ec571059ea7dfe337f` |
+| Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
+| Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
+
+The baseline revision PR is still evaluated against the 242-test file from its base commit.
+The new 246-test baseline becomes active only after a later default-branch run reports
+`baselineTests: 246`, `dropPercent: 0`, and no findings.
 
 ## Why only the primary job is wrapped
 
