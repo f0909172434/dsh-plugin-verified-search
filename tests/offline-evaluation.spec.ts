@@ -7,6 +7,7 @@ import {
   OfflineEvaluationContractError,
   parseOfflineEvaluationManifest,
   parseOfflineEvaluationSuite,
+  sha256Prefixed,
   type LoadedOfflineEvaluationSuite,
   type OfflineEvaluationManifest,
 } from '../src/offline-evaluation.js'
@@ -65,15 +66,37 @@ describe('frozen offline evaluation corpus', () => {
     expect(() => evaluateOfflineCorpus(manifest, tampered)).toThrowError(OfflineEvaluationContractError)
   })
 
-  it('reports assertion regressions instead of rewriting expectations', async () => {
+  it('fails closed when the parsed suite object differs from its exact bytes', async () => {
     const { manifest, suites } = await loadBundle()
     const changed = structuredClone(suites) as LoadedOfflineEvaluationSuite[]
-    const firstCase = changed[0]!.suite.cases[0]!
-    if (firstCase.expected.status !== 'pass') throw new Error('fixture contract changed')
-    const firstAssertion = firstCase.expected.assertions[0]!
-    Object.assign(firstAssertion, { equals: ['unexpected.example'] })
+    const rawCase = changed[0]!.suite.cases[0] as any
+    rawCase.expected.assertions[0].equals = ['unexpected.example']
 
-    const report = evaluateOfflineCorpus(manifest, changed)
+    expect(() => evaluateOfflineCorpus(manifest, changed))
+      .toThrowError(/loaded suite object does not match exact bytes/u)
+  })
+
+  it('reports assertion regressions when changed bytes are intentionally re-bound', async () => {
+    const { manifest, suites } = await loadBundle()
+    const rawSuite = JSON.parse(Buffer.from(suites[0]!.bytes).toString('utf8')) as any
+    rawSuite.cases[0].expected.assertions[0].equals = ['unexpected.example']
+    const bytes = Buffer.from(`${JSON.stringify(rawSuite, null, 2)}\n`, 'utf8')
+    const changedSuites: LoadedOfflineEvaluationSuite[] = [
+      {
+        file: suites[0]!.file,
+        bytes,
+        suite: parseOfflineEvaluationSuite(rawSuite),
+      },
+      ...suites.slice(1),
+    ]
+    const changedManifest: OfflineEvaluationManifest = {
+      ...manifest,
+      suites: manifest.suites.map((suite, index) => index === 0
+        ? { ...suite, sha256: sha256Prefixed(bytes) }
+        : suite),
+    }
+
+    const report = evaluateOfflineCorpus(changedManifest, changedSuites)
     expect(report.status).toBe('FAIL')
     expect(report.failed).toBe(1)
     expect(report.cases[0]).toMatchObject({
