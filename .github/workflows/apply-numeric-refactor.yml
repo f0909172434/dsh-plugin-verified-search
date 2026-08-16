@@ -1,0 +1,63 @@
+name: apply numeric selector refactor
+
+on:
+  push:
+    branches:
+      - agent/lossless-json-number-primitives
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-numeric-selector-refactor
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: agent/lossless-json-number-primitives
+          persist-credentials: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.28.2
+          run_install: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.19.0'
+          cache: pnpm
+      - name: Install locked dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Apply the bounded refactor
+        run: python .github/numeric-refactor/apply.py
+      - name: Type-check source and tests
+        run: pnpm run check
+      - name: Run the full test suite
+        run: pnpm test
+      - name: Build distributable artifacts
+        run: pnpm run build
+      - name: Reproduce the frozen offline corpus
+        run: pnpm run evaluate:offline
+      - name: Verify whitespace and package contents
+        run: |
+          git diff --check
+          npm pack --dry-run --ignore-scripts --json >/dev/null
+      - name: Commit the refactor and generated artifacts
+        env:
+          BRANCH: agent/lossless-json-number-primitives
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/json-lossless-number.ts src/json-numeric-selection.ts \
+            architecture.json capabilities.json docs/ARCHITECTURE.md CHANGELOG.md lib
+          git commit -m "refactor: extract lossless JSON number engine"
+          git push origin "HEAD:${BRANCH}"
