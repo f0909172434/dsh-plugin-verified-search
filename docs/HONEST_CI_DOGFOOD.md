@@ -84,7 +84,7 @@ CI entry:
 ## Stage 4 — baseline revision after corpus and property testing
 
 The frozen offline corpus and fixed-seed property suites increased the durable test contract
-from 222 to 237 tests. The revised baseline is derived from the first completed `main` run
+from 222 to 237 tests. The revised baseline was derived from the first completed `main` run
 containing both increments:
 
 | Field | Revised value |
@@ -105,10 +105,40 @@ containing both increments:
 | Revised baseline SHA-256 | `8057178b42a56ac9ac51a9e95146df0a4730e63933966717deecc9b710b63faa` |
 | Evidence creation time | `2026-08-16T07:43:33.691Z` |
 
-The baseline revision PR cannot use its own 237-test file to weaken the comparison. On pull
-requests, HonestCI reads `.honest-ci/baseline.json` from the base commit, so this revision is
-still evaluated against 222. A later default-branch run must activate and independently
-confirm the 237-test baseline before the revision loop is considered closed.
+The baseline revision PR could not use its own 237-test file to weaken the comparison. On pull
+requests, HonestCI read `.honest-ci/baseline.json` from the base commit, so the revision was
+still evaluated against 222.
+
+## Stage 5 — revised baseline activation confirmation
+
+The first `main` run containing the 237-test baseline independently confirmed the revision:
+
+| Field | Activated value |
+| --- | --- |
+| Activated commit | `a7dd8d3635eb3d86a7e125e1e319ed5948f90e27` |
+| Workflow run | `31934852209` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| Result status | `passed` |
+| Observed totals | 237 tests, 0 failures, 0 errors, 0 skipped |
+| Trusted baseline | 237 tests |
+| Observed drop | 0% |
+| Findings | none |
+| HonestCI artifact ID | `9260340343` |
+| HonestCI artifact digest | `sha256:2f7135f8da47020aefc612b7d43bca80c3723af788345524a168a9542464fa99` |
+| JUnit SHA-256 | `16a8e9f79a4a82c88031462121c19e81280088c8280e0e65b6d5d10d7c6049cc` |
+| Evidence JSON SHA-256 | `c5d6e61716e2ee3cace73511b5d219e0e83bf50bc3fd7b9b433836dc7398b5e9` |
+| Baseline artifact SHA-256 | `8057178b42a56ac9ac51a9e95146df0a4730e63933966717deecc9b710b63faa` |
+| Evidence creation time | `2026-08-16T07:49:29.582Z` |
+| Offline report artifact ID | `9260341116` |
+| Offline artifact digest | `sha256:fe93c2d77354e237dcb06e203e1b0973b53f644743d8ce46df918f03def667c5` |
+| Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
+| Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
+
+This closes the revision loop. Future pull requests now compare against the committed 237-test
+baseline, while the offline corpus remains independently fixed at 42 passing cases and its
+registered result digest.
 
 ## Why only the primary job is wrapped
 

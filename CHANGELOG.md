@@ -38,9 +38,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   reviewed baselines and corpus files remain committed.
 - The initial HonestCI baseline was activated by default-branch run `31932149983`, which
   observed 222 tests against 222 with zero drop and no findings.
-- The baseline contract now records 237 tests from main commit
-  `c059362f45ccf21359be6d3e360a0fb6a0266323`; a subsequent default-branch run must activate
-  this revision before the update loop is considered closed.
+- The 237-test baseline is active: default-branch run `31934852209` observed 237 tests against
+  237 with zero failures, errors, skipped tests, test-count drop, or findings across Ubuntu
+  and Windows on Node 22.19 and 24.
+- The same activation run reproduced all 42 offline cases with result digest
+  `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
   per-capability counts, and offline execution boundary.
 - Property failures now include a replayable hexadecimal seed and iteration number; generator
