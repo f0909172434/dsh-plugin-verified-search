@@ -1,0 +1,243 @@
+{
+  "$schema": "./suite.schema.json",
+  "capability": "json_numeric_selection",
+  "cases": [
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "51dab765cd511cda8dca15bda6e759ba86f0c16f76e6acfbbfecce0afb31838d", "pointer": "/evidenceSha256" },
+          { "equals": 1, "pointer": "/tieCount" },
+          { "equals": "9007199254740993", "pointer": "/extreme/value/jsonNumber" },
+          { "equals": 1, "pointer": "/rows/0/sourceIndex" },
+          { "equals": "b", "pointer": "/rows/0/values/id" },
+          { "equals": "9007199254740993", "pointer": "/rows/0/values/score/jsonNumber" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-bigint-max",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":9007199254740992},{\"id\":\"b\",\"score\":9007199254740993},{\"id\":\"c\",\"score\":9007199254740991}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "9b0a2fabaa99677b3e44f1b0035d4e4bcbed7ebed39648e5a75897bcf1420aa5", "pointer": "/evidenceSha256" },
+          { "equals": 3, "pointer": "/tieCount" },
+          { "equals": "1e3", "pointer": "/extreme/value/jsonNumber" },
+          { "equals": 0, "pointer": "/rows/0/sourceIndex" },
+          { "equals": 1, "pointer": "/rows/1/sourceIndex" },
+          { "equals": 2, "pointer": "/rows/2/sourceIndex" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-equivalent-ties",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":1e3},{\"id\":\"b\",\"score\":1000.0},{\"id\":\"c\",\"score\":10e2},{\"id\":\"d\",\"score\":999.999}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "975d1cff83967974a5c99f78b15b9cce307cf0a22aea15f5e2e7af3036b14f66", "pointer": "/evidenceSha256" },
+          { "equals": "-1e100", "pointer": "/extreme/value/jsonNumber" },
+          { "equals": "a", "pointer": "/rows/0/values/id" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-negative-min",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":-1e100},{\"id\":\"b\",\"score\":-9e99},{\"id\":\"c\",\"score\":-1e99}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "min", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "5fc222c0cb61198ce497b973893781db7e65ee35bff35bed7b32f7651b624e7f", "pointer": "/evidenceSha256" },
+          { "equals": 3, "pointer": "/tieCount" },
+          { "equals": "-0", "pointer": "/extreme/value/jsonNumber" },
+          { "equals": 0, "pointer": "/rows/0/sourceIndex" },
+          { "equals": 2, "pointer": "/rows/2/sourceIndex" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-zero-ties",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":-0},{\"id\":\"b\",\"score\":0.0},{\"id\":\"c\",\"score\":0e99},{\"id\":\"d\",\"score\":1}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "min", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "65777b2eacd18e0436c0bae39e48a9f5f3334df54a6e9504a9f7604df93d947c", "pointer": "/evidenceSha256" },
+          { "equals": 2, "pointer": "/rowsEligible" },
+          { "equals": "c", "pointer": "/rows/0/values/id" },
+          { "equals": "9", "pointer": "/extreme/value/jsonNumber" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-where-filter",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"active\":false,\"id\":\"a\",\"score\":100},{\"active\":true,\"id\":\"b\",\"score\":7},{\"active\":true,\"id\":\"c\",\"score\":9}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ],
+          "where": [
+            { "equals": true, "pointer": "/active" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "6b1381a3bef665cd7e01b3585c344586fd2c88dff974356e86eb39043094f1c6", "pointer": "/evidenceSha256" },
+          { "equals": 2, "pointer": "/rowsEligible" },
+          { "equals": "c", "pointer": "/rows/0/values/id" },
+          { "equals": "20", "pointer": "/extreme/value/jsonNumber" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-date-filter",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-01-01\",\"id\":\"a\",\"score\":10},{\"date\":\"2026-03-01\",\"id\":\"b\",\"score\":99},{\"date\":\"2026-02-01\",\"id\":\"c\",\"score\":20}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "filter": { "lte": "2026-02-15", "pointer": "/date" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": { "code": "JSON_NUMERIC_SELECTION_EXTREME_TYPE_MISMATCH", "status": "error" },
+      "id": "numeric-string-extreme",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":\"10\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": { "code": "JSON_NUMERIC_SELECTION_NO_MATCH", "status": "error" },
+      "id": "numeric-no-match",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"active\":false,\"id\":\"a\",\"score\":10}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ],
+          "where": [
+            { "equals": true, "pointer": "/active" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": { "code": "JSON_NUMERIC_SELECTION_DUPLICATE_KEY", "status": "error" },
+      "id": "numeric-duplicate-key",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":1,\"score\":2}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_numeric_selection",
+      "expected": {
+        "assertions": [
+          { "equals": "c5efee178010bb9a841894c806c5034ae49d0408cd80e33f59f342d6b87cb7eb", "pointer": "/evidenceSha256" },
+          { "equals": "1e1001", "pointer": "/extreme/value/jsonNumber" },
+          { "equals": "b", "pointer": "/rows/0/values/id" }
+        ],
+        "status": "pass"
+      },
+      "id": "numeric-large-exponent-order",
+      "operation": "json_numeric_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"score\":9.99e1000},{\"id\":\"b\",\"score\":1e1001},{\"id\":\"c\",\"score\":999e998}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "extreme": { "direction": "max", "pointer": "/score", "ties": "all" },
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "score", "pointer": "/score" }
+          ]
+        }
+      }
+    }
+  ],
+  "schemaVersion": "1.0.0",
+  "suiteId": "numeric-selection-v1"
+}
