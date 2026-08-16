@@ -1,0 +1,43 @@
+name: prepare 246-test HonestCI baseline evidence
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.head_ref == 'agent/honest-ci-json-primitives-baseline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Derive the proposal from completed main evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python .github/prepare-honest-ci-baseline-246.py
+      - name: Commit only the reviewed baseline proposal
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git rm .github/prepare-honest-ci-baseline-246.py
+          git rm .github/workflows/prepare-honest-ci-baseline-246.yml
+          git add .honest-ci/baseline.json \
+            .honest-ci/evidence/baseline-246-strict-json-primitives.json \
+            docs/HONEST_CI_BASELINE_246.md \
+            CHANGELOG.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: advance HonestCI baseline after strict JSON refactor'
+          git push origin "HEAD:${HEAD_REF}"
