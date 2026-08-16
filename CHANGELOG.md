@@ -87,6 +87,13 @@ This project separates reviewed releases from unreleased experiments. Dates use 
 - The date selector, numeric selector, and their two primitive modules all fit the 20,000-byte
   default budget. The numeric selector shrank from 29,228 to 19,516 bytes, its new lossless
   engine is 5,201 bytes, and five growth stops remain.
+- `json-projection.ts` now delegates bounded input decoding, Unicode validation, duplicate-key
+  scanning, depth enforcement, and strict materialization through a projection-owned error
+  adapter. It shrank from 31,362 to 26,624 bytes while retaining repair audits, source order,
+  nested projection, output budgets, and the complete `JSON_PROJECTION_*` vocabulary.
+- Architecture work now follows a serial one-active-PR workflow from the latest CI-green
+  `main`; self-merging refactor workflows and committed one-off extraction machinery are
+  prohibited, and HonestCI baselines advance only at durable milestones.
 - The maintenance contract now makes external reviewers, contributors, and adoption optional
   signals rather than development gates, while forbidding unsupported independent-validation
   claims.
