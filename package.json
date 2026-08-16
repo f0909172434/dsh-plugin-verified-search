@@ -10,12 +10,14 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./architecture.json": "./architecture.json",
     "./capabilities.json": "./capabilities.json",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
     "evaluation",
+    "architecture.json",
     "capabilities.json",
     "cordis.patch.yml",
     "LICENSE",
@@ -25,10 +27,12 @@
     "CHANGELOG.md",
     "MAINTENANCE.md",
     "docs/assets",
+    "docs/ARCHITECTURE.md",
     "docs/COMPATIBILITY.md",
     "docs/HONEST_CI_DOGFOOD.md",
     "docs/OFFLINE_EVALUATION.md",
     "docs/PROPERTY_TESTING.md",
+    "docs/architecture.schema.json",
     "docs/capabilities.schema.json"
   ],
   "scripts": {

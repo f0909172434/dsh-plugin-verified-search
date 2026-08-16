@@ -17,6 +17,18 @@ interface CapabilityTool {
   removal_condition: string
 }
 
+interface ArchitectureContract {
+  $schema: string
+  source_root: string
+  default_module_max_bytes: number
+  dependency_rules: {
+    relative_import_cycles: string
+    unclassified_source_files: string
+  }
+  layers: unknown[]
+  size_exceptions: unknown[]
+}
+
 interface CapabilityContract {
   $schema: string
   schema_version: string
@@ -48,6 +60,16 @@ interface CapabilityContract {
     case_count: number
     network_access_required: boolean
     capability_case_counts: Record<string, number>
+  }
+  architecture_contract: {
+    file: string
+    schema: string
+    source_root: string
+    layer_count: number
+    default_module_max_bytes: number
+    size_exception_count: number
+    relative_import_cycles: string
+    unclassified_source_files: string
   }
   non_goals: string[]
 }
@@ -148,6 +170,22 @@ describe('machine-readable product contract', () => {
       .toBe(manifest.caseCount)
   })
 
+  it('binds product metadata to the architecture contract', async () => {
+    const capabilities = await readJson<CapabilityContract>('../capabilities.json')
+    const architecture = await readJson<ArchitectureContract>('../architecture.json')
+
+    expect(capabilities.architecture_contract).toEqual({
+      file: 'architecture.json',
+      schema: architecture.$schema.replace('./', 'docs/').replace('docs/docs/', 'docs/'),
+      source_root: architecture.source_root,
+      layer_count: architecture.layers.length,
+      default_module_max_bytes: architecture.default_module_max_bytes,
+      size_exception_count: architecture.size_exceptions.length,
+      relative_import_cycles: architecture.dependency_rules.relative_import_cycles,
+      unclassified_source_files: architecture.dependency_rules.unclassified_source_files,
+    })
+  })
+
   it('requires explicit lifecycle origins and removal conditions', async () => {
     const capabilities = await readJson<CapabilityContract>('../capabilities.json')
 
@@ -164,15 +202,18 @@ describe('machine-readable product contract', () => {
     expect(capabilities.non_goals.length).toBeGreaterThan(0)
   })
 
-  it('ships lifecycle and evaluation contracts in the package allowlist', async () => {
+  it('ships lifecycle, evaluation, and architecture contracts in the package allowlist', async () => {
     const packageJson = await readJson<PackageContract>('../package.json')
     expect(packageJson.files).toEqual(expect.arrayContaining([
+      'architecture.json',
       'capabilities.json',
       'evaluation',
       'CHANGELOG.md',
       'MAINTENANCE.md',
+      'docs/ARCHITECTURE.md',
       'docs/COMPATIBILITY.md',
       'docs/OFFLINE_EVALUATION.md',
+      'docs/architecture.schema.json',
       'docs/capabilities.schema.json',
     ]))
   })

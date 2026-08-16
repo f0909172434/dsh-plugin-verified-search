@@ -13,6 +13,7 @@
     "upstream_contract",
     "model_facing_tools",
     "evaluation_contract",
+    "architecture_contract",
     "non_goals"
   ],
   "properties": {
@@ -244,6 +245,46 @@
               "const": 11
             }
           }
+        }
+      }
+    },
+    "architecture_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "schema",
+        "source_root",
+        "layer_count",
+        "default_module_max_bytes",
+        "size_exception_count",
+        "relative_import_cycles",
+        "unclassified_source_files"
+      ],
+      "properties": {
+        "file": {
+          "const": "architecture.json"
+        },
+        "schema": {
+          "const": "docs/architecture.schema.json"
+        },
+        "source_root": {
+          "const": "src"
+        },
+        "layer_count": {
+          "const": 5
+        },
+        "default_module_max_bytes": {
+          "const": 20000
+        },
+        "size_exception_count": {
+          "const": 7
+        },
+        "relative_import_cycles": {
+          "const": "forbidden"
+        },
+        "unclassified_source_files": {
+          "const": "forbidden"
         }
       }
     },
