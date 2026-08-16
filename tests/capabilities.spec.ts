@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createVerifiedJsonNumericSelectionTool } from '../src/json-numeric-tool.js'
 import { createVerifiedJsonProjectionTool } from '../src/json-projection-tool.js'
 import { createVerifiedJsonSelectionTool } from '../src/json-tool.js'
+import type { OfflineEvaluationManifest } from '../src/offline-evaluation.js'
 import { createVerifiedResearchTool } from '../src/research.js'
 import { createVerifiedSearchTool } from '../src/tool.js'
 import type { SearchOptions } from '../src/types.js'
@@ -41,6 +42,13 @@ interface CapabilityContract {
     compatibility_kind: string
   }
   model_facing_tools: CapabilityTool[]
+  evaluation_contract: {
+    corpus_id: string
+    manifest: string
+    case_count: number
+    network_access_required: boolean
+    capability_case_counts: Record<string, number>
+  }
   non_goals: string[]
 }
 
@@ -121,6 +129,25 @@ describe('machine-readable product contract', () => {
     })
   })
 
+  it('binds the declared evaluation contract to the frozen manifest', async () => {
+    const capabilities = await readJson<CapabilityContract>('../capabilities.json')
+    const manifest = await readJson<OfflineEvaluationManifest>('../evaluation/manifest.json')
+    const perCapability = Object.fromEntries(
+      manifest.suites.map(suite => [suite.capability, suite.caseCount]),
+    )
+
+    expect(capabilities.evaluation_contract).toEqual({
+      corpus_id: manifest.corpusId,
+      manifest: 'evaluation/manifest.json',
+      case_count: manifest.caseCount,
+      network_access_required: manifest.networkAccessRequired,
+      capability_case_counts: perCapability,
+    })
+    expect(manifest.networkAccessRequired).toBe(false)
+    expect(manifest.suites.reduce((total, suite) => total + suite.caseCount, 0))
+      .toBe(manifest.caseCount)
+  })
+
   it('requires explicit lifecycle origins and removal conditions', async () => {
     const capabilities = await readJson<CapabilityContract>('../capabilities.json')
 
@@ -137,13 +164,15 @@ describe('machine-readable product contract', () => {
     expect(capabilities.non_goals.length).toBeGreaterThan(0)
   })
 
-  it('ships the lifecycle contract in the package allowlist', async () => {
+  it('ships lifecycle and evaluation contracts in the package allowlist', async () => {
     const packageJson = await readJson<PackageContract>('../package.json')
     expect(packageJson.files).toEqual(expect.arrayContaining([
       'capabilities.json',
+      'evaluation',
       'CHANGELOG.md',
       'MAINTENANCE.md',
       'docs/COMPATIBILITY.md',
+      'docs/OFFLINE_EVALUATION.md',
       'docs/capabilities.schema.json',
     ]))
   })
