@@ -79,6 +79,16 @@
       "json_projection": 11
     }
   },
+  "architecture_contract": {
+    "file": "architecture.json",
+    "schema": "docs/architecture.schema.json",
+    "source_root": "src",
+    "layer_count": 5,
+    "default_module_max_bytes": 20000,
+    "size_exception_count": 7,
+    "relative_import_cycles": "forbidden",
+    "unclassified_source_files": "forbidden"
+  },
   "non_goals": [
     "hosted search service",
     "general web browser",
