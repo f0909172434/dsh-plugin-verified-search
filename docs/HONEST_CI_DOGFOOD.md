@@ -136,9 +136,42 @@ The first `main` run containing the 237-test baseline independently confirmed th
 | Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
 | Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
 
-This closes the revision loop. Future pull requests now compare against the committed 237-test
-baseline, while the offline corpus remains independently fixed at 42 passing cases and its
-registered result digest.
+This closed the first revision loop. Pull requests then compared against the committed
+237-test baseline, while the offline corpus remained independently fixed at 42 passing cases
+and its registered result digest.
+
+## Stage 6 — architecture-guard baseline revision
+
+The enforceable source-architecture contract added four graph and size-budget tests plus one
+product-contract binding test. The baseline candidate therefore advances from 237 to 242 only
+after the architecture PR was merged and its own default-branch workflow completed:
+
+| Field | Revised value |
+| --- | --- |
+| Source commit | `318d8f0105b2c6a1c4d2bc7c0282560e930800bc` |
+| Workflow run | `31936017824` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| HonestCI | `1.0.4` at `4ee4e30b283c219ff42e75606e692f34c91ba826` |
+| Observed totals | 242 tests, 0 failures, 0 errors, 0 skipped |
+| Previous trusted baseline | 237 tests |
+| Observed drop | 0% |
+| Findings | none |
+| GitHub artifact ID | `9260666767` |
+| GitHub artifact digest | `sha256:1178fc1076928e809be3ddf940cbe57a02bda6cdbe5781392aef8bc3145d4961` |
+| JUnit SHA-256 | `604c5c84d65915153b45524129c06c5f20096f4818d084caf568706ae72ab8f2` |
+| Evidence JSON SHA-256 | `fed00b1afc5a92c20ea7fccc1e73fdc85862f584df1f5d611ce2c20ab1e5c3a6` |
+| Previous baseline artifact SHA-256 | `8057178b42a56ac9ac51a9e95146df0a4730e63933966717deecc9b710b63faa` |
+| New baseline SHA-256 | `0e31e3803eae139932b9b5c16c53ba071f8f1084793af7c2b6a79f1cbbf63247` |
+| Evidence creation time | `2026-08-16T08:16:23.481Z` |
+| Offline report artifact ID | `9260667566` |
+| Offline artifact digest | `sha256:13070a19b27d53b88e62af01621f647f1e80bc8e0d5e03bbee12b8e41637062c` |
+| Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
+
+As before, the baseline revision PR is evaluated against the 237-test baseline from its base
+commit. The 242-test baseline is considered active only after a later `main` run reports
+`baselineTests: 242`, `dropPercent: 0`, and no findings.
 
 ## Why only the primary job is wrapped
 
