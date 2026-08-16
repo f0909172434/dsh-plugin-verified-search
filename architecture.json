@@ -25,7 +25,7 @@
         "src/domains.ts",
         "src/types.ts"
       ],
-      "max_import_layers": [
+      "may_import_layers": [
         "foundation"
       ]
     },
@@ -70,7 +70,7 @@
       "files": [
         "src/evaluate-offline-cli.ts"
       ],
-      "max_import_layers": [
+      "may_import_layers": [
         "foundation",
         "engine",
         "cli"
@@ -82,7 +82,7 @@
       "files": [
         "src/index.ts"
       ],
-      "max_import_layers": [
+      "may_import_layers": [
         "foundation",
         "engine",
         "harness",
