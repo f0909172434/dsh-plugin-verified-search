@@ -1,0 +1,62 @@
+name: refactor projection parsing through shared JSON primitives
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  refactor:
+    if: github.head_ref == 'agent/shared-json-primitives-projection-parser'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out the source branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.28.2
+          run_install: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.19.0'
+          cache: pnpm
+      - name: Install locked dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Migrate projection input and strict parsing
+        run: node .github/refactor-json-projection-primitives.mjs
+      - name: Type-check source and tests
+        run: pnpm run check
+      - name: Run all tests
+        run: pnpm test
+      - name: Build distributable artifacts
+        run: pnpm run build
+      - name: Require deterministic rebuilt artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --binary -- lib > /tmp/lib-first.diff
+          pnpm run build
+          git diff --binary -- lib > /tmp/lib-second.diff
+          cmp /tmp/lib-first.diff /tmp/lib-second.diff
+      - name: Reproduce the frozen offline corpus
+        run: pnpm run evaluate:offline
+      - name: Verify package contents without lifecycle scripts
+        run: npm pack --dry-run --ignore-scripts --json
+      - name: Commit the reviewed migration, wait for the full matrix, merge, and verify main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: python .github/finalize-json-projection-primitives.py
