@@ -37,7 +37,7 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Type-check source and tests
-        run: pnpm run check
+        run: pnmp run check
       - name: Run tests through HonestCI
         id: honest_ci
         uses: f0909172434/honest-ci@4ee4e30b283c219ff42e75606e692f34c91ba826 # v1.0.4
@@ -58,6 +58,14 @@ jobs:
           retention-days: 30
       - name: Build distributable artifacts
         run: pnpm run build
+      - name: Upload rebuilt lib for the refactor branch
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rebuilt-lib-${{ github.run_attempt }}
+          path: lib
+          if-no-files-found: warn
+          retention-days: 1
       - name: Run frozen offline evaluation
         run: pnpm run evaluate:offline
       - name: Upload offline evaluation report
@@ -105,10 +113,10 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Type-check source and tests
-        run: pnpm run check
+        run: pnmp run check
       - name: Run full test suite
         run: pnpm test
       - name: Verify build compatibility
-        run: pnpm run build
+        run: pnmp run build
       - name: Verify offline corpus compatibility
-        run: pnpm run evaluate:offline
+        run: pnmp run evaluate:offline

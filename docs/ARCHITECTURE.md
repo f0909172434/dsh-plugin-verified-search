@@ -43,6 +43,7 @@ network, evidence, orchestration, CLI, or Harness modules.
 src/provider.ts
 src/page-fetch.ts
 src/evidence.ts
+src/json-primitives.ts
 src/json-selection.ts
 src/json-numeric-selection.ts
 src/json-projection.ts
@@ -52,6 +53,12 @@ src/offline-evaluation.ts
 These modules implement bounded deterministic behavior and network/provider boundaries. They
 may depend on foundation and other engine modules, but may not import DeepSeek Harness or
 Cordis lifecycle packages.
+
+`json-primitives.ts` owns the bounded strict-JSON scanner, UTF-8 and Unicode input checks,
+RFC 6901 pointer parsing, and Gregorian/UTC date normalization. Callers provide the failure
+adapter, so the shared implementation does not replace each public tool's stable error-code
+vocabulary. `json-selection.ts` is the first migrated consumer; numeric selection and strict
+projection remain separate follow-up extractions.
 
 `provider.ts` belongs here because it owns the provider wire contract and sanitization rather
 than plugin registration. `page-fetch.ts` may call that sanitization, but neither module may
@@ -111,29 +118,32 @@ included in the graph.
 ## Current architecture debt
 
 The size ceilings are **growth stops**, not claims that the present modules are well-sized.
-They were rounded just above the exact bytes at main commit
+The remaining baseline measurements were recorded at main commit
 `e35c00cb530662175135eafdbbcc0adbf5b80bfb`.
 
-| Module | Baseline bytes | Ceiling | Target | First extraction |
+| Module | Baseline bytes | Ceiling | Target | Next extraction |
 | --- | ---: | ---: | ---: | --- |
 | `research.ts` | 66,102 | 67,000 | 20,000 | request normalization, then lane execution |
 | `evidence.ts` | 43,903 | 45,000 | 20,000 | HTML/text normalization |
-| `json-projection.ts` | 31,362 | 32,000 | 20,000 | strict JSON and pointer primitives |
-| `json-numeric-selection.ts` | 29,228 | 30,000 | 20,000 | strict JSON and pointer primitives |
+| `json-projection.ts` | 31,362 | 32,000 | 20,000 | adopt shared parsing, then repair-aware resolution |
+| `json-numeric-selection.ts` | 29,228 | 30,000 | 20,000 | adopt shared parsing while retaining lossless numbers |
 | `offline-evaluation.ts` | 24,859 | 26,000 | 20,000 | corpus parsing/integrity |
 | `page-fetch.ts` | 24,821 | 26,000 | 20,000 | address policy and transport state |
-| `json-selection.ts` | 24,306 | 25,000 | 20,000 | strict JSON, date, and pointer primitives |
 
-A feature PR may not increase one of these ceilings. If necessary work would cross a ceiling,
+The first extraction reduced `json-selection.ts` from its 24,306-byte baseline to 17,755
+bytes and moved 9,468 bytes of reusable parsing policy into `json-primitives.ts`. Both files
+now satisfy the default budget, so the date selector's temporary exception has been removed.
+A feature PR may not increase any remaining ceiling. If necessary work would cross a ceiling,
 the required extraction is part of that PR or precedes it in a separate PR.
 
 ## Decomposition order
 
 The staged order is chosen to reduce duplicated correctness logic before moving orchestration:
 
-1. **Shared strict JSON primitives.** Extract duplicate-key scanning, Unicode/depth checks,
-   RFC 6901 parsing, and ISO-date validation while retaining each public module's stable error
-   vocabulary. Re-run the 42-case corpus and all fixed-seed differential properties.
+1. **Shared strict JSON primitives — in progress.** The bounded scanner, input decoding,
+   RFC 6901 parsing, and ISO-date normalization now live in `json-primitives.ts`, and the date
+   selector uses them without changing its public errors. Migrate numeric selection next,
+   then projection, while retaining exact-number and pointer-repair semantics.
 2. **Research request normalization.** Move input validation and normalized claim/lane types
    out of `research.ts` without changing tool schemas or network behavior.
 3. **Research lane execution.** Separate bounded search/fetch work from aggregation and
@@ -145,9 +155,9 @@ The staged order is chosen to reduce duplicated correctness logic before moving 
 6. **Offline evaluator parsing.** Separate manifest/suite integrity from operation dispatch
    before the corpus gains another capability.
 
-Only one extraction is performed at a time. A refactor is accepted when public outputs,
-stable error codes, frozen corpus results, fixed-seed properties, and package artifacts remain
-unchanged.
+Only one consumer migration or extraction is performed at a time. A refactor is accepted when
+public outputs, stable error codes, frozen corpus results, fixed-seed properties, and package
+artifacts remain unchanged.
 
 ## Adding a module
 
