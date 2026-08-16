@@ -125,7 +125,7 @@ The first `main` run containing the 237-test baseline independently confirmed th
 | Trusted baseline | 237 tests |
 | Observed drop | 0% |
 | Findings | none |
-| HonestCI artifact ID | `9260340343` |
+| GitHub artifact ID | `9260340343` |
 | HonestCI artifact digest | `sha256:2f7135f8da47020aefc612b7d43bca80c3723af788345524a168a9542464fa99` |
 | JUnit SHA-256 | `16a8e9f79a4a82c88031462121c19e81280088c8280e0e65b6d5d10d7c6049cc` |
 | Evidence JSON SHA-256 | `c5d6e61716e2ee3cace73511b5d219e0e83bf50bc3fd7b9b433836dc7398b5e9` |
@@ -234,9 +234,40 @@ completed post-merge `main` run for the refactor:
 | Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
 | Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
 
-The baseline revision PR is still evaluated against the 242-test file from its base commit.
-The new 246-test baseline becomes active only after a later default-branch run reports
-`baselineTests: 246`, `dropPercent: 0`, and no findings.
+The baseline revision PR was evaluated against the 242-test file from its base commit; it
+could not use the new file to weaken its own comparison.
+
+## Stage 9 — strict-JSON primitive baseline activation
+
+The first default-branch run containing the committed 246-test baseline independently closed
+the revision loop:
+
+| Field | Activated value |
+| --- | --- |
+| Activated commit | `6d0f360b6d01df6d72e4e2716450062cbd7659db` |
+| Workflow run | `31939485242` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| Result status | `passed` |
+| Observed totals | 246 tests, 0 failures, 0 errors, 0 skipped |
+| Trusted baseline | 246 tests |
+| Observed drop | 0% |
+| Findings | none |
+| HonestCI artifact ID | `9261614703` |
+| HonestCI artifact digest | `sha256:713c9c98ebb9b144f531ef316ca11b0cd3341d52a22c5d70be500ebdf01a217b` |
+| JUnit SHA-256 | `6a66a2b1c8d152bfdac17d56bb5c1824e1ce52ba8c4594a2df2b6a1fb3aeee8a` |
+| Evidence JSON SHA-256 | `315284f0eb9dc10e4fd2ba5e17ccf80feb80587e32c37216c139310dd43d4371` |
+| Baseline artifact SHA-256 | `3a14a6acb9df71166832475f3685bab07e94b6ceca8e91e5309bec1d63c9ae55` |
+| Evidence creation time | `2026-08-16T09:36:47.085Z` |
+| Offline report artifact ID | `9261615453` |
+| Offline artifact digest | `sha256:870b752af51fd983611fd52bd677a8ee5c7273a558ea4b98201c3cdb397339ce` |
+| Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
+| Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
+
+Future pull requests now compare against the active 246-test baseline. This activation records
+only observed CI behavior and does not broaden the product's live-provider or external-adoption
+claims.
 
 ## Why only the primary job is wrapped
 
