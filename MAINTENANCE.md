@@ -87,6 +87,18 @@ Every feature pull request must state:
 A new model-facing tool, network exception, source-specific parser, provider, or lifecycle
 hook requires a separate architectural decision rather than an incidental addition.
 
+## Single-maintainer evidence rule
+
+External reviewers, contributors, users, stars, and adoption are optional signals rather than
+development prerequisites. Their absence must not block bounded refactors, deterministic
+evaluation, security work, or maintenance.
+
+When independent review is unavailable, confidence is built from frozen corpora, independent
+reference implementations, differential and metamorphic checks, fixed-seed properties,
+cross-platform CI, reproducible package artifacts, and exact evidence hashes. These controls
+do not become “independent review”: documentation must state that external validation is
+absent instead of inventing a reviewer or leaving engineering work blocked on one.
+
 ## Release discipline
 
 - Releases are cut from an explicitly reviewed commit, never from a moving branch name.

@@ -40,6 +40,10 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   validation, strict parsing, UTF-8 decoding, and caller-provided limits.
 - A revised 246-test HonestCI baseline derived from completed default-branch run
   `31938769457` after the strict-JSON primitive extraction added four durable behavior tests.
+- A bounded `json-lossless-number.ts` engine for exact source-token retention, arbitrary
+  decimal-exponent normalization, and comparison without IEEE-754 collapse.
+- Direct tests for lossless lexeme retention, exact comparison, shared strict-JSON failures,
+  caller-provided number limits, and pre-materialization depth bounds.
 
 ### Changed
 
@@ -70,8 +74,15 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   modules may shrink but may not cross their recorded ceilings before decomposition.
 - `json-selection.ts` now delegates shared parsing and date rules through a caller-specific
   error adapter. Its public result shape and `JSON_SELECTION_*` vocabulary remain unchanged.
-- The date selector and its new primitive module both fit the 20,000-byte default budget, so
-  the `json-selection.ts` architecture exception has been removed; six growth stops remain.
+- `json-numeric-selection.ts` now delegates shared input, pointer, date, and strict-JSON rules,
+  plus exact number parsing and comparison, through a caller-specific error adapter. Its
+  public result shape and `JSON_NUMERIC_SELECTION_*` vocabulary remain unchanged.
+- The date selector, numeric selector, and their two primitive modules all fit the 20,000-byte
+  default budget. The numeric selector shrank from 29,228 to 19,516 bytes, its new lossless
+  engine is 5,201 bytes, and five growth stops remain.
+- The maintenance contract now makes external reviewers, contributors, and adoption optional
+  signals rather than development gates, while forbidding unsupported independent-validation
+  claims.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
@@ -96,7 +107,7 @@ release and must be installed by an exact commit when evaluated.
   remain unsupported.
 - Passing repository tests, properties, the offline corpus, or the architecture guard does not
   constitute a live provider or clean Harness installation result.
-- Six production modules remain above the default size budget and are tracked as temporary
+- Five production modules remain above the default size budget and are tracked as temporary
   architecture debt rather than described as complete modularization.
 
 ## 0.1.1 — 2026-08-14

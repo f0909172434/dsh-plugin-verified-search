@@ -1,5 +1,18 @@
 import { createHash } from 'node:crypto'
 import {
+  compareLosslessJsonNumbers,
+  isLosslessJsonNumber,
+  parseLosslessStrictJson,
+  type LosslessJsonFailureKind,
+  type LosslessJsonNumber,
+} from './json-lossless-number.js'
+import {
+  decodeJsonInput,
+  parseJsonPointer,
+  requireIsoDate as requireValidIsoDate,
+  requireSourceDate as requireValidSourceDate,
+} from './json-primitives.js'
+import {
   JSON_SELECTION_MAX_INPUT_BYTES,
   JSON_SELECTION_MAX_PROJECTED_SCALAR_BYTES,
   JSON_SELECTION_MAX_ROWS,
@@ -17,23 +30,6 @@ const MAX_PROJECTIONS = 32
 const MAX_EQUALITY_FILTERS = 4
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const MAX_PROJECTED_OUTPUT_BYTES = 4 * 1024 * 1024
-const JSON_NUMBER = /^(-)?(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?)(\d+))?$/u
-
-const losslessNumberBrand = Symbol('lossless-json-number')
-
-interface NormalizedNumber {
-  readonly sign: -1 | 0 | 1
-  /** Significant decimal digits without leading or trailing zeroes. */
-  readonly digits: string
-  /** The exact value is sign * digits * 10^scale. */
-  readonly scale: bigint
-}
-
-interface LosslessJsonNumber {
-  readonly [losslessNumberBrand]: true
-  readonly lexeme: string
-  readonly normalized: NormalizedNumber
-}
 
 export interface JsonNumberLexeme {
   readonly [key: string]: string
@@ -151,23 +147,38 @@ interface ProjectionBudget {
   usedBytes: number
 }
 
-type JsonParseWithSource = (
-  text: string,
-  reviver: (this: unknown, key: string, value: unknown, context?: { readonly source?: unknown }) => unknown,
-) => unknown
-
 function fail(message: string, code: JsonNumericSelectionErrorCode, options?: ErrorOptions): never {
   throw new JsonNumericSelectionError(message, code, options)
 }
 
-function isLosslessNumber(value: unknown): value is LosslessJsonNumber {
-  return typeof value === 'object'
-    && value !== null
-    && (value as Partial<LosslessJsonNumber>)[losslessNumberBrand] === true
+const JSON_FAILURE_ERROR_CODES = {
+  invalid_request: 'JSON_NUMERIC_SELECTION_INVALID_REQUEST',
+  input_too_large: 'JSON_NUMERIC_SELECTION_INPUT_TOO_LARGE',
+  invalid_utf8: 'JSON_NUMERIC_SELECTION_INVALID_UTF8',
+  invalid_unicode: 'JSON_NUMERIC_SELECTION_INVALID_UNICODE',
+  invalid_json: 'JSON_NUMERIC_SELECTION_INVALID_JSON',
+  duplicate_key: 'JSON_NUMERIC_SELECTION_DUPLICATE_KEY',
+  parse_limit_exceeded: 'JSON_NUMERIC_SELECTION_PARSE_LIMIT_EXCEEDED',
+  invalid_pointer: 'JSON_NUMERIC_SELECTION_INVALID_POINTER',
+  invalid_iso_date: 'JSON_NUMERIC_SELECTION_INVALID_ISO_DATE',
+  number_token_limit_exceeded: 'JSON_NUMERIC_SELECTION_NUMBER_TOKEN_LIMIT_EXCEEDED',
+  number_lexeme_limit_exceeded: 'JSON_NUMERIC_SELECTION_NUMBER_LEXEME_LIMIT_EXCEEDED',
+  lossless_parse_unavailable: 'JSON_NUMERIC_SELECTION_LOSSLESS_PARSE_UNAVAILABLE',
+} as const satisfies Record<LosslessJsonFailureKind, JsonNumericSelectionErrorCode>
+
+function failJsonFailure(
+  kind: LosslessJsonFailureKind,
+  message: string,
+  options?: ErrorOptions,
+): never {
+  fail(message, JSON_FAILURE_ERROR_CODES[kind], options)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && !isLosslessNumber(value)
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && !isLosslessJsonNumber(value)
 }
 
 function assertExactObject(
@@ -190,67 +201,23 @@ function assertExactObject(
 }
 
 function parsePointer(pointer: unknown, label: string): readonly string[] {
-  if (typeof pointer !== 'string') fail(`${label} must be a string`, 'JSON_NUMERIC_SELECTION_INVALID_POINTER')
-  if (pointer.length > MAX_POINTER_LENGTH) {
-    fail(`${label} exceeds ${MAX_POINTER_LENGTH} characters`, 'JSON_NUMERIC_SELECTION_INVALID_POINTER')
-  }
-  if (pointer === '') return []
-  if (!pointer.startsWith('/')) fail(`${label} must be an RFC 6901 JSON Pointer`, 'JSON_NUMERIC_SELECTION_INVALID_POINTER')
-  const rawSegments = pointer.slice(1).split('/')
-  if (rawSegments.length > MAX_POINTER_SEGMENTS) {
-    fail(`${label} exceeds ${MAX_POINTER_SEGMENTS} segments`, 'JSON_NUMERIC_SELECTION_INVALID_POINTER')
-  }
-  return rawSegments.map((segment) => {
-    if (/~(?:[^01]|$)/u.test(segment)) {
-      fail(`${label} contains an invalid RFC 6901 escape`, 'JSON_NUMERIC_SELECTION_INVALID_POINTER')
-    }
-    return segment.replace(/~1/gu, '/').replace(/~0/gu, '~')
+  return parseJsonPointer(pointer, label, {
+    maxLength: MAX_POINTER_LENGTH,
+    maxSegments: MAX_POINTER_SEGMENTS,
+    fail: failJsonFailure,
   })
 }
 
-function isLeapYear(year: number): boolean {
-  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-}
-
-function isIsoDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false
-  const year = Number(value.slice(0, 4))
-  const month = Number(value.slice(5, 7))
-  const day = Number(value.slice(8, 10))
-  if (year < 1 || month < 1 || month > 12 || day < 1) return false
-  const days = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-  return day <= days[month - 1]!
-}
-
 function requireIsoDate(value: unknown, label: string): string {
-  if (!isIsoDate(value)) {
-    fail(`${label} must be a valid ISO calendar date (YYYY-MM-DD)`, 'JSON_NUMERIC_SELECTION_INVALID_ISO_DATE')
-  }
-  return value
+  return requireValidIsoDate(value, label, failJsonFailure)
 }
 
 function requireSourceDate(value: unknown, label: string): string {
-  if (isIsoDate(value)) return value
-  const timestamp = typeof value === 'string'
-    ? /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?Z$/u.exec(value)
-    : null
-  if (timestamp === null
-    || !isIsoDate(timestamp[1])
-    || Number(timestamp[2]) > 23
-    || Number(timestamp[3]) > 59
-    || Number(timestamp[4]) > 59) {
-    fail(`${label} must be an ISO calendar date or UTC RFC 3339 timestamp`, 'JSON_NUMERIC_SELECTION_INVALID_ISO_DATE')
-  }
-  return timestamp[1]
+  return requireValidSourceDate(value, label, failJsonFailure)
 }
 
 function compileRequest(input: JsonNumericSelectionRequest): CompiledRequest {
-  const request = assertExactObject(
-    input,
-    ['arrayPointer', 'filter', 'where', 'extreme', 'project'],
-    ['arrayPointer', 'extreme', 'project'],
-    'request',
-  )
+  const request = assertExactObject(input, ['arrayPointer', 'filter', 'where', 'extreme', 'project'], ['arrayPointer', 'extreme', 'project'], 'request')
   if (typeof request.arrayPointer !== 'string') {
     fail('request.arrayPointer must be a string', 'JSON_NUMERIC_SELECTION_INVALID_REQUEST')
   }
@@ -341,225 +308,30 @@ function compileRequest(input: JsonNumericSelectionRequest): CompiledRequest {
   }
 }
 
-function hasUnpairedSurrogate(value: string): boolean {
-  for (let index = 0; index < value.length; index++) {
-    const code = value.charCodeAt(index)
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return true
-      index++
-    } else if (code >= 0xdc00 && code <= 0xdfff) {
-      return true
-    }
-  }
-  return false
-}
-
-class StrictJsonScanner {
-  private cursor = 0
-
-  constructor(private readonly input: string) {}
-
-  scan(): void {
-    this.skipWhitespace()
-    this.scanValue(0)
-    this.skipWhitespace()
-    if (this.cursor !== this.input.length) fail('JSON has trailing content', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  }
-
-  private scanValue(depth: number): void {
-    if (depth > MAX_JSON_DEPTH) {
-      fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_NUMERIC_SELECTION_PARSE_LIMIT_EXCEEDED')
-    }
-    const character = this.input[this.cursor]
-    if (depth === MAX_JSON_DEPTH && (character === '{' || character === '[')) {
-      fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_NUMERIC_SELECTION_PARSE_LIMIT_EXCEEDED')
-    }
-    if (character === '{') this.scanObject(depth + 1)
-    else if (character === '[') this.scanArray(depth + 1)
-    else if (character === '"') this.scanString()
-    else this.scanPrimitive()
-  }
-
-  private scanObject(depth: number): void {
-    this.cursor++
-    this.skipWhitespace()
-    if (this.input[this.cursor] === '}') {
-      this.cursor++
-      return
-    }
-    const keys = new Set<string>()
-    while (this.cursor < this.input.length) {
-      if (this.input[this.cursor] !== '"') fail('invalid JSON object key', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-      const key = this.scanString()
-      if (keys.has(key)) fail('JSON object contains a duplicate key', 'JSON_NUMERIC_SELECTION_DUPLICATE_KEY')
-      keys.add(key)
-      this.skipWhitespace()
-      if (this.input[this.cursor] !== ':') fail('invalid JSON object separator', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-      this.scanValue(depth)
-      this.skipWhitespace()
-      const separator = this.input[this.cursor]
-      if (separator === '}') {
-        this.cursor++
-        return
-      }
-      if (separator !== ',') fail('invalid JSON object separator', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-    }
-    fail('unterminated JSON object', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  }
-
-  private scanArray(depth: number): void {
-    this.cursor++
-    this.skipWhitespace()
-    if (this.input[this.cursor] === ']') {
-      this.cursor++
-      return
-    }
-    while (this.cursor < this.input.length) {
-      this.scanValue(depth)
-      this.skipWhitespace()
-      const separator = this.input[this.cursor]
-      if (separator === ']') {
-        this.cursor++
-        return
-      }
-      if (separator !== ',') fail('invalid JSON array separator', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-    }
-    fail('unterminated JSON array', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  }
-
-  private scanString(): string {
-    const start = this.cursor
-    this.cursor++
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]
-      if (character === '"') {
-        this.cursor++
-        let decoded: unknown
-        try {
-          decoded = JSON.parse(this.input.slice(start, this.cursor))
-        } catch (error: unknown) {
-          fail('invalid JSON string', 'JSON_NUMERIC_SELECTION_INVALID_JSON', { cause: error })
-        }
-        if (typeof decoded !== 'string') fail('invalid JSON string', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-        if (hasUnpairedSurrogate(decoded)) {
-          fail('JSON strings must not contain unpaired UTF-16 surrogates', 'JSON_NUMERIC_SELECTION_INVALID_UNICODE')
-        }
-        return decoded
-      }
-      if (character === '\\') this.cursor += this.input[this.cursor + 1] === 'u' ? 6 : 2
-      else this.cursor++
-    }
-    fail('unterminated JSON string', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  }
-
-  private scanPrimitive(): void {
-    const start = this.cursor
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]!
-      if (character === ',' || character === ']' || character === '}' || /\s/u.test(character)) break
-      this.cursor++
-    }
-    if (this.cursor === start) fail('invalid JSON value', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  }
-
-  private skipWhitespace(): void {
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]
-      if (character !== ' ' && character !== '\t' && character !== '\r' && character !== '\n') break
-      this.cursor++
-    }
-  }
-}
-
-function decodeInput(input: string | Uint8Array): { readonly text: string; readonly bytes: Uint8Array } {
-  if (typeof input === 'string') {
-    if (hasUnpairedSurrogate(input)) {
-      fail('JSON input must not contain unpaired UTF-16 surrogates', 'JSON_NUMERIC_SELECTION_INVALID_UNICODE')
-    }
-    const bytes = Buffer.from(input, 'utf8')
-    if (bytes.byteLength > JSON_SELECTION_MAX_INPUT_BYTES) {
-      fail('JSON input exceeds the 8 MiB limit', 'JSON_NUMERIC_SELECTION_INPUT_TOO_LARGE')
-    }
-    return { text: input, bytes }
-  }
-  if (!(input instanceof Uint8Array)) fail('JSON input must be a string or Uint8Array', 'JSON_NUMERIC_SELECTION_INVALID_REQUEST')
-  if (input.byteLength > JSON_SELECTION_MAX_INPUT_BYTES) {
-    fail('JSON input exceeds the 8 MiB limit', 'JSON_NUMERIC_SELECTION_INPUT_TOO_LARGE')
-  }
-  try {
-    return { text: new TextDecoder('utf-8', { fatal: true }).decode(input), bytes: input }
-  } catch (error: unknown) {
-    fail('JSON input is not valid UTF-8', 'JSON_NUMERIC_SELECTION_INVALID_UTF8', { cause: error })
-  }
-}
-
-function parseExponent(sign: string | undefined, digits: string | undefined): bigint {
-  if (digits === undefined) return 0n
-  const value = BigInt(digits)
-  return sign === '-' ? -value : value
-}
-
-function normalizeNumber(lexeme: string): NormalizedNumber {
-  const match = JSON_NUMBER.exec(lexeme)
-  if (match === null) fail('lossless parser returned an invalid JSON number token', 'JSON_NUMERIC_SELECTION_INVALID_JSON')
-  const fraction = match[3] ?? ''
-  const combined = `${match[2]}${fraction}`
-  const withoutLeading = combined.replace(/^0+/u, '')
-  if (withoutLeading === '') return { sign: 0, digits: '0', scale: 0n }
-
-  let trailingZeroes = 0
-  for (let index = withoutLeading.length - 1; index >= 0 && withoutLeading[index] === '0'; index--) trailingZeroes++
-  const digits = trailingZeroes === 0 ? withoutLeading : withoutLeading.slice(0, -trailingZeroes)
-  const scale = parseExponent(match[4], match[5]) - BigInt(fraction.length) + BigInt(trailingZeroes)
-  return { sign: match[1] === '-' ? -1 : 1, digits, scale }
-}
-
-function createLosslessNumber(lexeme: string): LosslessJsonNumber {
-  if (Buffer.byteLength(lexeme, 'utf8') > JSON_NUMERIC_SELECTION_MAX_LEXEME_BYTES) {
-    fail(
-      `JSON number token exceeds the ${JSON_NUMERIC_SELECTION_MAX_LEXEME_BYTES}-byte limit`,
-      'JSON_NUMERIC_SELECTION_NUMBER_LEXEME_LIMIT_EXCEEDED',
-    )
-  }
-  return Object.freeze({
-    [losslessNumberBrand]: true as const,
-    lexeme,
-    normalized: normalizeNumber(lexeme),
+function parseStrictJson(text: string): unknown {
+  return parseLosslessStrictJson(text, {
+    maxDepth: MAX_JSON_DEPTH,
+    maxNumberTokens: JSON_NUMERIC_SELECTION_MAX_NUMBER_TOKENS,
+    maxLexemeBytes: JSON_NUMERIC_SELECTION_MAX_LEXEME_BYTES,
+    fail: failJsonFailure,
+    isFailure: error => error instanceof JsonNumericSelectionError,
   })
 }
 
-function parseStrictJson(text: string): unknown {
-  new StrictJsonScanner(text).scan()
-  let numberTokens = 0
-  try {
-    return (JSON.parse as JsonParseWithSource)(text, (_key, value, context) => {
-      if (typeof value !== 'number') return value
-      numberTokens++
-      if (numberTokens > JSON_NUMERIC_SELECTION_MAX_NUMBER_TOKENS) {
-        fail(
-          `JSON contains more than ${JSON_NUMERIC_SELECTION_MAX_NUMBER_TOKENS} number tokens`,
-          'JSON_NUMERIC_SELECTION_NUMBER_TOKEN_LIMIT_EXCEEDED',
-        )
-      }
-      if (typeof context?.source !== 'string') {
-        fail('runtime did not expose the exact JSON number token', 'JSON_NUMERIC_SELECTION_LOSSLESS_PARSE_UNAVAILABLE')
-      }
-      return createLosslessNumber(context.source)
-    })
-  } catch (error: unknown) {
-    if (error instanceof JsonNumericSelectionError) throw error
-    fail('JSON input is invalid', 'JSON_NUMERIC_SELECTION_INVALID_JSON', { cause: error })
-  }
+function decodeInput(input: string | Uint8Array): { readonly text: string; readonly bytes: Uint8Array } {
+  return decodeJsonInput(input, {
+    maxBytes: JSON_SELECTION_MAX_INPUT_BYTES,
+    maxBytesLabel: '8 MiB',
+    fail: failJsonFailure,
+  })
 }
 
-function resolvePointer(root: unknown, segments: readonly string[], pointer: string, label: string): unknown {
+function resolvePointer(
+  root: unknown,
+  segments: readonly string[],
+  pointer: string,
+  label: string,
+): unknown {
   let value = root
   for (const segment of segments) {
     if (Array.isArray(value)) {
@@ -584,29 +356,12 @@ function resolvePointer(root: unknown, segments: readonly string[], pointer: str
   return value
 }
 
-function compareMagnitude(left: NormalizedNumber, right: NormalizedNumber): -1 | 0 | 1 {
-  const leftOrder = left.scale + BigInt(left.digits.length)
-  const rightOrder = right.scale + BigInt(right.digits.length)
-  if (leftOrder !== rightOrder) return leftOrder < rightOrder ? -1 : 1
-  const length = Math.max(left.digits.length, right.digits.length)
-  for (let index = 0; index < length; index++) {
-    const leftDigit = index < left.digits.length ? left.digits.charCodeAt(index) : 48
-    const rightDigit = index < right.digits.length ? right.digits.charCodeAt(index) : 48
-    if (leftDigit !== rightDigit) return leftDigit < rightDigit ? -1 : 1
-  }
-  return 0
-}
-
-function compareNumbers(left: NormalizedNumber, right: NormalizedNumber): -1 | 0 | 1 {
-  if (left.sign !== right.sign) return left.sign < right.sign ? -1 : 1
-  if (left.sign === 0) return 0
-  const magnitude = compareMagnitude(left, right)
-  return left.sign === -1 ? (magnitude === 0 ? 0 : magnitude === 1 ? -1 : 1) : magnitude
-}
-
 function consumeProjectionBudget(budget: ProjectionBudget, bytes: number): void {
   if (budget.usedBytes + bytes > MAX_PROJECTED_OUTPUT_BYTES) {
-    fail('JSON numeric selection projected output exceeds the 4 MiB construction limit', 'JSON_NUMERIC_SELECTION_OUTPUT_TOO_LARGE')
+    fail(
+      'JSON numeric selection projected output exceeds the 4 MiB construction limit',
+      'JSON_NUMERIC_SELECTION_OUTPUT_TOO_LARGE',
+    )
   }
   budget.usedBytes += bytes
 }
@@ -620,16 +375,24 @@ function projectRow(
   const values: Record<string, JsonNumericProjectedScalar> = {}
   consumeProjectionBudget(budget, 48 + String(sourceIndex).length)
   for (const projection of request.projections) {
-    const source = resolvePointer(row, projection.segments, projection.pointer, `row ${sourceIndex} projection`)
+    const source = resolvePointer(
+      row,
+      projection.segments,
+      projection.pointer,
+      `row ${sourceIndex} projection`,
+    )
     let value: JsonNumericProjectedScalar
-    if (isLosslessNumber(source)) value = { jsonNumber: source.lexeme }
+    if (isLosslessJsonNumber(source)) value = { jsonNumber: source.lexeme }
     else if (source === null || typeof source === 'string' || typeof source === 'boolean') value = source
     else {
       fail(`row ${sourceIndex} projection is not a JSON scalar`, 'JSON_NUMERIC_SELECTION_NON_SCALAR_PROJECTION')
     }
     const serializedBytes = Buffer.byteLength(JSON.stringify(value), 'utf8')
     if (serializedBytes > JSON_SELECTION_MAX_PROJECTED_SCALAR_BYTES) {
-      fail(`row ${sourceIndex} projected scalar exceeds the 64 KiB limit`, 'JSON_NUMERIC_SELECTION_OUTPUT_TOO_LARGE')
+      fail(
+        `row ${sourceIndex} projected scalar exceeds the 64 KiB limit`,
+        'JSON_NUMERIC_SELECTION_OUTPUT_TOO_LARGE',
+      )
     }
     consumeProjectionBudget(budget, projection.name.length + serializedBytes + 4)
     values[projection.name] = value
@@ -650,7 +413,10 @@ export function selectJsonNumericTies(
   const evidenceSha256 = createHash('sha256').update(decoded.bytes).digest('hex')
   const root = parseStrictJson(decoded.text)
   if (!isRecord(root) && !(Array.isArray(root) && request.arraySegments.length === 0)) {
-    fail('JSON root must be an object, or an array when arrayPointer is empty', 'JSON_NUMERIC_SELECTION_ROOT_TYPE_MISMATCH')
+    fail(
+      'JSON root must be an object, or an array when arrayPointer is empty',
+      'JSON_NUMERIC_SELECTION_ROOT_TYPE_MISMATCH',
+    )
   }
 
   const selectedArray = resolvePointer(root, request.arraySegments, request.arrayPointer, 'array pointer')
@@ -658,7 +424,10 @@ export function selectJsonNumericTies(
     fail('array pointer must resolve to an array', 'JSON_NUMERIC_SELECTION_ARRAY_TYPE_MISMATCH')
   }
   if (selectedArray.length > JSON_SELECTION_MAX_ROWS) {
-    fail(`selected array exceeds the ${JSON_SELECTION_MAX_ROWS} row limit`, 'JSON_NUMERIC_SELECTION_ROW_LIMIT_EXCEEDED')
+    fail(
+      `selected array exceeds the ${JSON_SELECTION_MAX_ROWS} row limit`,
+      'JSON_NUMERIC_SELECTION_ROW_LIMIT_EXCEEDED',
+    )
   }
 
   let rowsEligible = 0
@@ -690,11 +459,14 @@ export function selectJsonNumericTies(
       request.extremePointer,
       `row ${sourceIndex} numeric extreme`,
     )
-    if (!isLosslessNumber(candidate)) {
-      fail(`row ${sourceIndex} numeric extreme must be a JSON number`, 'JSON_NUMERIC_SELECTION_EXTREME_TYPE_MISMATCH')
+    if (!isLosslessJsonNumber(candidate)) {
+      fail(
+        `row ${sourceIndex} numeric extreme must be a JSON number`,
+        'JSON_NUMERIC_SELECTION_EXTREME_TYPE_MISMATCH',
+      )
     }
 
-    const comparison = best === undefined ? 1 : compareNumbers(candidate.normalized, best.normalized)
+    const comparison = best === undefined ? 1 : compareLosslessJsonNumbers(candidate, best)
     const replaces = best === undefined
       || (request.direction === 'max' ? comparison > 0 : comparison < 0)
     if (replaces) {
@@ -711,7 +483,10 @@ export function selectJsonNumericTies(
 
   if (best === undefined) fail('no row satisfied the selection filters', 'JSON_NUMERIC_SELECTION_NO_MATCH')
   if (tieOverflow) {
-    fail(`final numeric ties exceed the ${JSON_SELECTION_MAX_TIES} row limit`, 'JSON_NUMERIC_SELECTION_TIE_LIMIT_EXCEEDED')
+    fail(
+      `final numeric ties exceed the ${JSON_SELECTION_MAX_TIES} row limit`,
+      'JSON_NUMERIC_SELECTION_TIE_LIMIT_EXCEEDED',
+    )
   }
 
   const projectionBudget: ProjectionBudget = { usedBytes: 0 }
