@@ -19,6 +19,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   projection.
 - Deterministic offline evaluation CLI and machine-readable report with no model, provider,
   browser, DNS, or network dependency.
+- Nine fixed-seed property and differential suites covering 7,350 generated iterations for
+  domains, evidence URLs, private-address blocking, redirects, JSON pointers, source order,
+  date selection, and exact decimal extrema.
+- Independent date and decimal reference implementations that do not call the corresponding
+  production selectors.
 
 ### Changed
 
@@ -33,6 +38,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   successful Ubuntu/Windows compatibility run.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
   per-capability counts, and offline execution boundary.
+- Property failures now include a replayable hexadecimal seed and iteration number; generator
+  seeds and bounds are documented rather than taken from wall-clock entropy.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
@@ -52,11 +59,11 @@ release and must be installed by an exact commit when evaluated.
 ### Known limits
 
 - No stable compatibility promise exists for the experimental tools.
-- The offline corpus covers deterministic bounded primitives; only two larger live
-  official-source tasks have been recorded, so broad retrieval-quality claims remain
-  unsupported.
-- Passing repository tests or the offline corpus does not constitute a live provider or clean
-  Harness installation result.
+- The offline corpus and generated properties cover deterministic bounded primitives; only
+  two larger live official-source tasks have been recorded, so broad retrieval-quality claims
+  remain unsupported.
+- Passing repository tests, properties, or the offline corpus does not constitute a live
+  provider or clean Harness installation result.
 
 ## 0.1.1 — 2026-08-14
 
