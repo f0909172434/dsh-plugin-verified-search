@@ -1,0 +1,156 @@
+{
+  "$schema": "./docs/architecture.schema.json",
+  "schema_version": "1.0.0",
+  "baseline_commit": "e35c00cb530662175135eafdbbcc0adbf5b80bfb",
+  "source_root": "src",
+  "default_module_max_bytes": 20000,
+  "dependency_rules": {
+    "relative_import_cycles": "forbidden",
+    "unclassified_source_files": "forbidden",
+    "unresolved_relative_imports": "forbidden",
+    "harness_external_prefixes": [
+      "@deepseek-ai/cordis",
+      "@deepseek-ai/dsh-"
+    ],
+    "harness_external_import_layers": [
+      "harness",
+      "composition"
+    ]
+  },
+  "layers": [
+    {
+      "name": "foundation",
+      "purpose": "Dependency-light value contracts and hostname policy shared by every higher layer.",
+      "files": [
+        "src/domains.ts",
+        "src/types.ts"
+      ],
+      "may_import_layers": [
+        "foundation"
+      ]
+    },
+    {
+      "name": "engine",
+      "purpose": "Bounded deterministic provider, fetch, evidence, JSON-selection, and offline-evaluation engines without Harness lifecycle dependencies.",
+      "files": [
+        "src/evidence.ts",
+        "src/json-numeric-selection.ts",
+        "src/json-projection.ts",
+        "src/json-selection.ts",
+        "src/offline-evaluation.ts",
+        "src/page-fetch.ts",
+        "src/provider.ts"
+      ],
+      "may_import_layers": [
+        "foundation",
+        "engine"
+      ]
+    },
+    {
+      "name": "harness",
+      "purpose": "DeepSeek Harness tool definitions, lifecycle policy, orchestration, presentation, and adapter code.",
+      "files": [
+        "src/json-numeric-tool.ts",
+        "src/json-projection-tool.ts",
+        "src/json-tool.ts",
+        "src/research.ts",
+        "src/tool.ts"
+      ],
+      "may_import_layers": [
+        "foundation",
+        "engine",
+        "harness"
+      ]
+    },
+    {
+      "name": "cli",
+      "purpose": "Non-Harness command entry points that may call bounded engines but not plugin adapters.",
+      "files": [
+        "src/evaluate-offline-cli.ts"
+      ],
+      "may_import_layers": [
+        "foundation",
+        "engine",
+        "cli"
+      ]
+    },
+    {
+      "name": "composition",
+      "purpose": "Public package export surface and plugin composition root.",
+      "files": [
+        "src/index.ts"
+      ],
+      "may_import_layers": [
+        "foundation",
+        "engine",
+        "harness",
+        "composition"
+      ]
+    }
+  ],
+  "size_exceptions": [
+    {
+      "path": "src/evidence.ts",
+      "baseline_bytes": 43903,
+      "max_bytes": 45000,
+      "target_bytes": 20000,
+      "reason": "HTML normalization, text extraction, claim attribution, and excerpt assembly are still colocated.",
+      "next_extraction": "Extract HTML/text normalization before adding another media or attribution strategy.",
+      "removal_condition": "Remove this exception when every resulting production module is at or below the default module budget."
+    },
+    {
+      "path": "src/json-numeric-selection.ts",
+      "baseline_bytes": 29228,
+      "max_bytes": 30000,
+      "target_bytes": 20000,
+      "reason": "Lossless number scanning, exact decimal comparison, request validation, and selection remain in one engine.",
+      "next_extraction": "Extract shared strict-JSON and RFC 6901 primitives without weakening module-specific error codes.",
+      "removal_condition": "Remove this exception after shared primitives are extracted and the selector is within the default budget."
+    },
+    {
+      "path": "src/json-projection.ts",
+      "baseline_bytes": 31362,
+      "max_bytes": 32000,
+      "target_bytes": 20000,
+      "reason": "Strict parsing, pointer repair audits, nested projection, and output budgeting are still colocated.",
+      "next_extraction": "Extract shared strict-JSON and pointer-resolution primitives, then isolate nested projection.",
+      "removal_condition": "Remove this exception when the projection engine and extracted modules each satisfy the default budget."
+    },
+    {
+      "path": "src/json-selection.ts",
+      "baseline_bytes": 24306,
+      "max_bytes": 25000,
+      "target_bytes": 20000,
+      "reason": "Strict JSON validation, date normalization, pointer resolution, and maximum-tie selection are colocated.",
+      "next_extraction": "Move shared strict-JSON, ISO-date, and RFC 6901 utilities into engine-layer modules.",
+      "removal_condition": "Remove this exception when the date selector falls below the default budget."
+    },
+    {
+      "path": "src/offline-evaluation.ts",
+      "baseline_bytes": 24859,
+      "max_bytes": 26000,
+      "target_bytes": 20000,
+      "reason": "Corpus contract parsing, integrity verification, operation dispatch, assertions, and reporting are colocated.",
+      "next_extraction": "Separate corpus parsing/integrity from operation execution before adding another evaluated capability.",
+      "removal_condition": "Remove this exception when parser and runner modules independently satisfy the default budget."
+    },
+    {
+      "path": "src/page-fetch.ts",
+      "baseline_bytes": 24821,
+      "max_bytes": 26000,
+      "target_bytes": 20000,
+      "reason": "Address policy, DNS resolution, HTTPS transport, redirects, decoding, and response limits are colocated.",
+      "next_extraction": "Extract public-address policy and transport state handling without introducing a second network implementation.",
+      "removal_condition": "Remove this exception when the network policy and transport modules each satisfy the default budget."
+    },
+    {
+      "path": "src/research.ts",
+      "baseline_bytes": 66102,
+      "max_bytes": 67000,
+      "target_bytes": 20000,
+      "reason": "Request validation, lane execution, source fetching, claim attribution, aggregation, formatting, and Harness tool definition are colocated.",
+      "next_extraction": "Extract request normalization and lane execution first; do not add another research mode to this file.",
+      "removal_condition": "Remove this exception after orchestration is split into bounded modules and no production module exceeds the default budget."
+    }
+  ]
+}
