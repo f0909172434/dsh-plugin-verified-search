@@ -1,0 +1,38 @@
+{
+  "$schema": "./manifest.schema.json",
+  "caseCount": 42,
+  "corpusId": "verified-search-offline-v1",
+  "description": "Frozen offline capability corpus for deterministic domain, date-selection, exact-number, and projection behavior.",
+  "networkAccessRequired": false,
+  "schemaVersion": "1.0.0",
+  "suites": [
+    {
+      "capability": "domain_filter",
+      "caseCount": 11,
+      "file": "domains-v1.json",
+      "sha256": "sha256:0dae3e933c37de50c9c7461091f1474a9f7f7c42598d7cd06c9bc2d922b22a37",
+      "suiteId": "domain-filter-v1"
+    },
+    {
+      "capability": "json_date_selection",
+      "caseCount": 10,
+      "file": "date-selection-v1.json",
+      "sha256": "sha256:c2a3633bbf69891d4400a5a9169f2688495b36233c8ec207fc1a1d2d69bd8aab",
+      "suiteId": "date-selection-v1"
+    },
+    {
+      "capability": "json_numeric_selection",
+      "caseCount": 10,
+      "file": "numeric-selection-v1.json",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "suiteId": "numeric-selection-v1"
+    },
+    {
+      "capability": "json_projection",
+      "caseCount": 11,
+      "file": "projection-v1.json",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "suiteId": "projection-v1"
+    }
+  ]
+}
