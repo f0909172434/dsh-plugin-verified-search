@@ -1,107 +1,42 @@
 # dsh-plugin-verified-search
 
+[![CI](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/f0909172434/dsh-plugin-verified-search?display_name=tag)](https://github.com/f0909172434/dsh-plugin-verified-search/releases)
+[![License](https://img.shields.io/github/license/f0909172434/dsh-plugin-verified-search)](LICENSE)
+
 [English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
-这是一个可直接安装到 DeepSeek Harness 的社区插件，专门处理“当前、最新、截至某日”等需要明确来源范围并诚实披露证据缺口的搜索。
+**为 DeepSeek Harness 提供可审计的当前来源检索。**
 
-本项目是 [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) 的可部署配套。它不宣称搜索索引永远最新，也不把模型生成的摘要当作证据；它让搜索流程、来源边界、提取内容与未解字段都可以被审计。
+本插件会替换具备搜索能力的 agent 所继承的 `web_search`，改用有界工作流，让来源范围、保留证据、确定性的 JSON 选择和未解缺口都清晰可见。它是 [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) 的可安装配套，也会挂载 [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344) 讨论的时间上下文。
+
+它验证的是工作流和 structured-source postcondition，**不会**认证 publisher 的内容一定正确，也不保证上游搜索索引永远最新。
 
 ![有界证据工作流架构](docs/assets/architecture.zh-CN.svg)
 
-> **尚未发布的实验版本：** `main` 当前包含 `0.3.0-experiment.0` 的复合研究与结构化 JSON 工具。这些功能不属于已审查的 `v0.1.1` 稳定标签。测试未发布代码时，请固定到明确 commit，不要依赖会移动的分支。
+## 发布状态
 
-## 它解决什么
+| 产品线 | 安装 ref | Model-facing 工具 | 验证边界 |
+| --- | --- | --- | --- |
+| 稳定版 | `v0.1.1` | `verified_search` | 维护者验证的 release tag，包含软件包 artifact、checksums、跨平台 CI、干净 profile 安装和已记录的真实 provider conformance |
+| 实验快照 | `c29b531a6c2e52200d454aa9ded42214ba8c0014` | 下列全部五个工具 | 2026-08-16 当时最后一个绿色 `main` 快照；250 tests 和 42-case frozen offline corpus 全部通过 |
+| 移动中的 `main` | `main` | 未发布开发代码 | 不要在可复现测试中直接安装；不同 commit 之间的行为和 generated artifacts 可能变化 |
 
-DeepSeek Harness rc.6 原本的 `web_search` 只有一个 `query`，另一个独立的 Flash 模型再决定是否搜索以及如何生成子查询。默认组合也没有完整页面读取，因此主 agent 经常只能看到标题和 URL；“最新模型比较”可能因此混入旧版本，却没有足够内容可供验证。
+> **外部独立验证：暂无。** Repository 提供内部 deterministic tests、CI、package reproducibility checks 和维护者执行的 conformance evidence；这些信号不会被描述成第三方审查。
 
-此外，Harness 已经提供 `dsh-time-context`，但 rc.6 的默认 composition 没有挂载它；这正是 [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344) 指出的时间上下文缺口。
+## 前置要求
 
-本插件会：
+- DeepSeek Harness `0.1.0-rc.6` 和 Cordis `4.0.1`。
+- Node.js `22.19.x` 或 `24.x`。
+- 通过 Harness credential service 或启动环境提供 `DEEPSEEK_API_KEY`。
+- 使用原本就有搜索能力的 preset；本插件不会给内置 `minimal` preset 扩权。
+- CI 覆盖 Ubuntu 和 Windows；macOS 目前不属于正式支持契约。
 
-- 每 60 秒挂载 Harness 内置的 `dsh-time-context`；
-- 对有搜索能力的 agent 隐藏并阻止旧 `web_search`，但不为 `minimal` preset 扩权；
-- 提供 `verified_search`、`verified_research` 和三个有界 JSON 工具；
-- 规范化 1–20 个裸 ASCII hostname，拒绝 scheme、path、port、wildcard、Unicode hostname 和 IP literal；
-- 将 `allowed_domains` 传给 provider，同时在本地对返回的结构化来源执行 hostname postfilter；
-- 在来源进入工具结果或 session 前移除 URL credential、敏感／跟踪 query 参数与 fragment；
-- 将搜索 query 和 credential-free request envelope 先写入 Harness 已知的 durable event，再发送 provider request；
-- 将所有远程标题、URL、excerpt 和 JSON scalar 明确标为不可信数据；
-- 在有界研究完成后阻止同一 turn 的 shell、Python、其他搜索或 MCP fallback，要求 agent 直接回答并逐项列出 unresolved claims。
+更换 Harness、Cordis、Node 或 package-manager 版本前，请先阅读[兼容性契约](docs/COMPATIBILITY.md)。
 
-## 工具一览
+## 一分钟安装
 
-| 工具 | 适合的任务 | 可验证边界 |
-| --- | --- | --- |
-| `verified_search` | 单一、狭窄、会变化的查询 | 返回的结构化来源 URL 符合 allowlist；缺少 excerpt 时降低置信度 |
-| `verified_research` | 多来源、多实体、多字段比较 | 每个 covered claim 都保留一段完整、连续、模型可见的提取文本与 hash |
-| `verified_json_selection` | 官方 JSON feed 的截止日期最大值与同日 ties | 严格 RFC 6901、日期 cutoff、最大日期、所有 final ties |
-| `verified_json_numeric_extrema` | JSON 数值最大／最小与全部 ties | 使用来源中的精确 number lexeme，比较不经过 IEEE-754 |
-| `verified_json_projection` | 按来源顺序投影全部严格匹配行和一层 nested array | 不排序、不猜 latest；pointer repair 必须唯一并完整记录 |
-
-## `verified_research` 的证据契约
-
-一次调用可以包含 1–4 个 lane，每个 lane 1–6 个 claim，总计最多 24 个 claim。每个 lane 应提供：
-
-- 明确的 `allowed_domains`；
-- 最多两个已知的一手 `seed_urls`；
-- 一条与首次 query 不同、且不包含待验证答案候选值的 `gap_query`；
-- 每个 claim 的 `query`、`evidence_must_include`、`value_kind` 和 typed `scope`。
-
-`evidence_must_include` 不是 regex，也不是语义裁判。它会规范化大小写、Unicode 空白、常见弯引号与 dash 变体，然后要求每个指定短语都出现在最终保留的 excerpt 中。不要把未知答案本身放进短语，否则只是在让模型确认自己的猜测。
-
-`scope` 有两种：
-
-- `document`：使用 page-global 的候选中立标记确认文档身份，也可以绑定 `YYYY-MM` 文档月份；
-- `event_row`：要求 row-local 标记，并按指定月份或 `after + select:first` 选择事件行。包含 `Released`、`Last Update` 等 metadata label 的行不能冒充事件日期。
-
-每个 covered claim 最多保留一段完整、连续且不超过 2,000 字符的 excerpt，并附带：
-
-- `excerptStart` / `excerptEnd`；
-- `retrievedAt`；
-- normalized page text 的 SHA-256；
-- claim status：`covered`、`blocked` 或 `missing`。
-
-Provider snippet 只用于 discovery，不能升级为已验证证据。
-
-### 安全的完整页面读取
-
-页面读取器刻意保持狭窄边界：
-
-- 仅接受 HTTPS 443、DNS hostname，且 URL 不得含 credential；
-- DNS 返回的每个 IP 都必须是 public address，并将已验证 IP 绑定到实际 TLS connection；
-- 每个 redirect hop 都重新检查 URL、allowlist、DNS 和 IP，普通 redirect 不得跨 origin；
-- 限制 redirect 次数、总时间、body idle、bytes、media type 和 content encoding；
-- UTF-8 使用 fatal decode；明确声明的 `ISO-8859-1`／`windows-1252` 按 WHATWG 映射，其余 charset fail closed；
-- 不执行 script、不携带 cookie、不接受任意 binary 文档；
-- discovery 会跳过 `/printable/pdf`、PDF、Office 和 ZIP 路径，明确指定的 binary seed 则保留可见失败。
-
-唯一的跨 origin 例外是精确的 EUR-Lex `uri=CELEX:...` 英文 legal-content request：必须同时 allowlist `eur-lex.europa.eu` 与 `publications.europa.eu`，才能通过官方 Publications Office resolver 获取固定格式的 Cellar XHTML 表示。这个例外由显式状态机约束，不适用于其他 202 或 redirect。
-
-## 结构化 JSON 工具
-
-所有 JSON 工具都先用有界 scanner 检查 depth、duplicate key、UTF-8／Unicode，再由 `JSON.parse` 建立对象。网络 feed 上限为 2 MiB；pure selector API 另有 8 MiB input、25,000 rows、256 ties、64 KiB scalar、4 MiB construction 和 8 MiB output 等限制。
-
-`verified_json_projection` 只投影 string、boolean 或 null。普通 `JSON.parse` 无法保留大型 JSON number 的精确 lexeme，因此 numeric filter／projection 会被拒绝；需要数值比较时请使用 `verified_json_numeric_extrema`。
-
-如果 JSON root 本身是 array，但模型误填了非空 `array_pointer`，projection 可以退回 root array，并在 `pointerAudits` 中记录 `root_array_fallback`。对象 key 只有在“唯一 ASCII case-insensitive match”时才允许修复；歧义、非 ASCII 猜测或不同 row 产生不一致 repair 都会 fail closed。工具不会猜测 value、filter、排序或 field alias。
-
-## 实测结果
-
-![两个困难一手来源任务的实测完成率](docs/assets/benchmark.zh-CN.svg)
-
-本轮使用两个不同领域、预先冻结 requested-field ledger 的困难搜索测试当前版本：
-
-| 任务 | 修正前 | 当前实验版 | Terminal 时间 |
-| --- | ---: | ---: | ---: |
-| Go 支持线、security fixes 与 Linux artifact provenance | 0/8 | **8/8** | 317 秒 |
-| EU AI Act 修法时间线与 GPAI 过渡期限 | 0/8 | **6/8** | 307 秒 |
-| **合计** | **0/16** | **14/16（87.5%）** | — |
-
-已回答的 14 个 requested field 全部有保留的一手来源证据，grounded precision 为 14/14；没有输出无证据的 requested assertion。EU 剩余两个字段明确标为 unresolved。这只是 600 秒外层上限下的单次观测，不是标准化 benchmark、统计估计或 production SLO。延迟仍然较高，而且两题都超过 240 秒。
-
-## 安装
-
-安装已审查的稳定标签：
+### 稳定版 `verified_search`
 
 ```powershell
 dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
@@ -109,35 +44,71 @@ dsh --profile web --dump-config
 dsh web
 ```
 
-测试尚未发布的 v0.3 workflow 时，请固定到已验证的实验 commit：
+等价的单行 PowerShell 命令：
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#67d337ebb754b51b703df3f690310482c0f2d14d
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
+```
+
+Release 已提交 prebuilt `lib/`，并且没有 install-time build script；固定 Git ref 安装时，不会在用户机器上执行本 repository 的开发工具链。
+
+### 五工具实验快照
+
+```powershell
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
 dsh --profile web --dump-config
 dsh web
 ```
 
-如果 deployment 已经挂载 Discussion #344 的 `time-context` row，请在启动 Harness 前设置 `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1`，避免两个 clock injector。
+该快照只适合开发和评估。需要可复现结果时，不要把明确 commit 替换为会移动的 `main`。
 
-回滚：
+如果 deployment 已挂载 Discussion #344 的 `time-context` row，请在启动 Harness 前设置 `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1`，避免重复的 clock injector。
+
+### 回滚
 
 ```powershell
 dsh plugin --profile web remove dsh-plugin-verified-search
 dsh web
 ```
 
-## 使用示例
+## 最小 quickstart
 
-单一 first-party 查询：
+向具备搜索能力的 agent 提出有界、带绝对日期的问题，例如：
+
+> 找出截至 2026-08-14 的 DeepSeek 当前旗舰 API model。只使用 `api-docs.deepseek.com`。如果保留来源没有包含答案的 excerpt，请报告 unresolved，不要用记忆补答案。
+
+对应的 model-facing `verified_search` arguments：
 
 ```json
 {
-  "query": "DeepSeek current flagship model as of 2026-08-14",
-  "allowed_domains": ["deepseek.com"]
+  "query": "DeepSeek current flagship API model as of 2026-08-14",
+  "allowed_domains": ["api-docs.deepseek.com"]
 }
 ```
 
-复合研究 lane：
+预期行为：
+
+- 将原生 provider allowlist 发送给上游；
+- 在本地按照精确 hostname 或 subdomain 对返回的 structured sources 再做 postfilter；
+- credential-bearing URL 和敏感／跟踪 URL 组件会在组成 session-visible 结果前被拒绝或移除；
+- 只有标题或 URL、却没有保留 citation excerpt 的来源，不会升级为已验证证据；
+- 证据缺口会保持可见，不会被旧答案或模型记忆替代。
+
+需要独立比较来源时，另做一次不限制 domain 的查询。Allowlist 是“返回 structured-source hostname”的 postcondition，不是 network-egress 或 privacy boundary。
+
+## 选择正确工具
+
+| 工具 | 适合的任务 | 有界结果 |
+| --- | --- | --- |
+| `verified_search` | 单一、狭窄、会变化的事实查询 | Structured-source hostname postfilter，citation excerpt 缺口保持可见 |
+| `verified_research` | 多实体或多 claim 研究 | 每个 claim 的保留 excerpt、retrieval metadata、content hash 和明确 unresolved claims |
+| `verified_json_selection` | 从官方 JSON feed 做 latest／as-of 选择 | 严格 RFC 6901、日期 cutoff、最大日期和全部 final ties |
+| `verified_json_numeric_extrema` | JSON 的精确数值最大／最小值 | 直接比较 source lexeme、不经过 IEEE-754，并保留全部 final ties |
+| `verified_json_projection` | 按来源顺序取得全部严格匹配 JSON rows | 有界 parent／nested projection、可审计 pointer repair、不推测排序语义 |
+
+只有 `verified_search` 属于稳定的 `v0.1.1`。其余四个工具都属于固定 `0.3.0-experiment.0` 快照中的实验功能。
+
+### 复合研究示例
 
 ```json
 {
@@ -163,42 +134,108 @@ dsh web
 }
 ```
 
-## 保证与限制
+`evidence_must_include` 是规范化 substring postcondition，不是语义 entailment 裁判。不要把未知答案本身放进 required phrase，只为了确认模型自己的猜测。
 
-当 `allowed_domains` 存在时，插件返回的每个结构化来源都必须匹配 allowlist；越界来源会在本地移除，只报告数量，不暴露其 URL、标题或 excerpt。
+## 失败行为
 
-但插件**不能证明**：
+本插件会 fail closed，或者把状态保持为明确 unresolved。
 
-- provider 的内部 candidate pool 只使用 allowlist；
-- 上游索引包含最新页面，或 ranking 的时间顺序正确；
-- `page_age` 是 ISO publication date；
-- URL 或 caller-supplied seed 必然是 canonical／first-party；
-- phrase、typed value gate 或 `allClaimsCovered` 已经证明语义 entailment；
-- fetched API 没有 pagination，或已经返回完整 corpus；
-- publisher 的数据真实、单位正确、版本仍然有效；
-- public allowlisted 页面中的文字可以被当作指令执行。
+- 无效 hostname allowlist、credential-bearing URL、不安全 redirect、非 public resolved address、不支持 media、错误 charset 声明、无效 UTF-8 和资源上限违规，都会产生可见失败。
+- Structured JSON 操作会拒绝无效 JSON、duplicate key、过深 nesting、无效 pointer、缺少字段、不支持的 numeric projection、row／tie／output 超限，以及无法取得 exact number lexeme 的 runtime。
+- Discovery 可以跳过已知 binary path；明确提供但不支持的 binary seed 会留下可见失败，不会被静默重新解释。
+- Provider 或 fetch timeout 会中止有界工作，并保留证据缺口。
+- `allClaimsCovered`、`complete: true` 或 `truncated: false` 只描述声明的有界操作；不证明来源新鲜度、语义 entailment、publisher authenticity、feed completeness 或 pagination 已耗尽。
 
-因此，本项目只将自己描述为“可验证的 workflow 与 structured-source postcondition”，不保证每个答案永远正确或最新。
+## 信任与安全边界
 
-## 开发与验证
+本插件可以保证：本地过滤后返回的 structured sources 符合明确 hostname allowlist。实验版完整页面 reader 还会把抓取限制在有界 public HTTPS target，并执行 DNS/IP validation、pinned transport、redirect checks、text/JSON media 和 charset validation，以及 byte/time limits。
+
+它**不能证明**：
+
+- provider 的私有 candidate pool 或生成 prose 只使用 allowlist；
+- provider 没有自行抓取其他页面或跟随 allowlist 以外的 redirect；
+- 上游索引一定包含最新页面，或时间 ranking 正确；
+- 保留的 phrase 已在语义上支持 claim，或者能正确处理否定；
+- caller 指定的 seed URL 一定 canonical、first-party 或 authoritative；
+- API response 真实、完整、没有 pagination、排序语义正确或事实正确；
+- public page 的文字可以安全地当作指令执行。
+
+Search query 会成为 durable Harness session data。不要把 secret、signed URL 或私人数据放入 query。私密报告和完整 threat boundary 请见 [SECURITY.md](SECURITY.md)。
+
+## 验证快照
+
+固定的实验快照记录：
+
+- source commit：`c29b531a6c2e52200d454aa9ded42214ba8c0014`；
+- push CI：Ubuntu 和 Windows、Node `22.19.x` 和 `24.x` 全部通过；
+- HonestCI baseline：**250 tests**，0 failures、0 errors、0 skipped；
+- frozen offline corpus：**42/42 cases**；
+- registered offline result digest：`sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`；
+- committed `lib/` 和 package-content reproducibility checks；
+- 外部独立验证：**暂无**。
+
+Machine-readable 的 lifecycle、runtime、capability 和 architecture facts 位于 [`capabilities.json`](capabilities.json) 和 [`architecture.json`](architecture.json)。评估方法请见 [docs/OFFLINE_EVALUATION.md](docs/OFFLINE_EVALUATION.md)、[docs/PROPERTY_TESTING.md](docs/PROPERTY_TESTING.md) 和 [docs/HONEST_CI_DOGFOOD.md](docs/HONEST_CI_DOGFOOD.md)。
+
+## 实测观察
+
+![两个困难官方来源任务的完成率变化](docs/assets/benchmark.zh-CN.svg)
+
+两个 frozen-ledger live tasks 在 600 秒外层上限下得到以下单次观察：
+
+| 任务 | 修正前 | 实验工作流 | Terminal 时间 |
+| --- | ---: | ---: | ---: |
+| Go 支持 releases、security scope 和 Linux artifact provenance | 0/8 | **8/8** | 317 秒 |
+| EU AI Act 修法时间线和 GPAI 过渡期限 | 0/8 | **6/8** | 307 秒 |
+| **合计** | **0/16** | **14/16（87.5%）** | — |
+
+已回答的 14 个 requested fields 都有保留的官方来源证据；另外两个字段保持 unresolved。这些只是单次观察，不是标准化 benchmark、统计估计、latency target 或 release guarantee。两次成功 terminal run 都超过 240 秒，因此 timeout 和 latency 仍是重要改进方向。
+
+## 配置
+
+Bundle 可以从 Harness credential service 或 launch environment 读取 `DEEPSEEK_API_KEY`。可选配置包括：
+
+| 类别 | Fields |
+| --- | --- |
+| Provider | `apiKeyEnv`、`apiKey`、`baseURL`、`model`、`apiVersion` |
+| Search limits | `maxTokens`、`maxUses`、`maxResults`、`searchTimeoutMs` |
+| Experimental research | `researchTimeoutMs`、`researchMaxResults` |
+
+`researchMaxResults` 默认为 24，范围 4–32，并且不得低于本次调用声明的 claim count。配置变更属于 compatibility 和 resource-boundary 变更，不只是性能调参。
+
+## 开发和完整验证
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile --ignore-scripts
 pnpm run check
 pnpm test
 pnpm run build
+pnpm run evaluate:offline
 npm pack --dry-run --ignore-scripts --json
+git diff --check
+git diff --exit-code -- lib
 ```
 
-当前测试覆盖 hostname／legacy IP、credential-safe failure、request-before-dispatch、provider wire、allowlist postfilter、seed-first claim coverage、search barrier、abort quiescence、SSRF／redirect、charset、EUR-Lex Cellar、bounded HTML／JSON、完整 model-visible excerpt、typed claim scopes、exact numeric lexeme、all-tie retention、pointer repair、turn-scoped finalization 与 agent lifecycle。
+第二次 build 不得产生新的 `lib/` diff。Frozen offline digest 发生变化代表可能存在行为变更；不要只为让 CI 变绿就更新 expected digest。
 
-## 与 Harness 核心修复的关系
+## 文档
 
-这个插件是可部署的兼容层。针对 Harness provider-neutral `ctx.web` contract 与内置 providers 的核心修复仍位于 [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。如果官方项目合并相同能力，本插件可以转为额外验证模式或退役。
+- [架构和 ownership boundaries](docs/ARCHITECTURE.md)
+- [兼容性契约](docs/COMPATIBILITY.md)
+- [Frozen offline evaluation](docs/OFFLINE_EVALUATION.md)
+- [Property-testing contract](docs/PROPERTY_TESTING.md)
+- [HonestCI dogfooding evidence](docs/HONEST_CI_DOGFOOD.md)
+- [单人串行维护 roadmap](docs/ROADMAP.md)
+- [维护规则](MAINTENANCE.md)
+- [安全策略](SECURITY.md)
+- [变更记录](CHANGELOG.md)
+
+## 与上游核心修复的关系
+
+本 repository 是可部署的 compatibility layer。Provider-neutral Harness core change 仍位于 [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。如果官方项目发布等价的有界能力，本插件可以转为额外验证模式，或通过有文档的 migration path 退役。
 
 ## 安全报告
 
-请通过本 repository 已启用的 GitHub private security-advisory interface 报告 credential leak、allowlist bypass 或 unsafe page-fetch path。请勿将 API key、signed URL、包含私人数据的 search query、私人 excerpt 或原始 session log 发布到 public issue。
+如果怀疑存在 credential leak、allowlist bypass 或 unsafe page-fetch path，请使用本 repository 的 GitHub private security-advisory interface。不要把 API key、signed URL、私人 query、私人 excerpt 或 raw session log 粘贴到 public issue。
 
 ## License
 

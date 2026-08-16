@@ -1,107 +1,42 @@
 # dsh-plugin-verified-search
 
+[![CI](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/f0909172434/dsh-plugin-verified-search?display_name=tag)](https://github.com/f0909172434/dsh-plugin-verified-search/releases)
+[![License](https://img.shields.io/github/license/f0909172434/dsh-plugin-verified-search)](LICENSE)
+
 [English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
-這是一個可直接安裝到 DeepSeek Harness 的社群外掛，專門處理「目前、最新、截至某日」等需要明確來源範圍與誠實揭露證據缺口的搜尋。
+**為 DeepSeek Harness 提供可稽核的現況來源檢索。**
 
-本專案是 [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) 的可部署配套。它不宣稱搜尋索引永遠最新，也不把模型生成的摘要當成證據；它讓搜尋流程、來源邊界、擷取內容與未解欄位都可以被稽核。
+此外掛會替換具搜尋能力 agent 繼承的 `web_search`，改用有界工作流程，讓來源範圍、保留證據、確定性的 JSON 選取與未解缺口都清楚可見。它是 [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) 的可安裝配套，也會掛載 [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344) 討論的時間上下文。
+
+它驗證的是工作流程與 structured-source postcondition，**不會**認證 publisher 的內容必然正確，也不保證上游搜尋索引永遠最新。
 
 ![有界證據工作流程架構](docs/assets/architecture.zh.svg)
 
-> **尚未發布的實驗版本：** `main` 目前包含 `0.3.0-experiment.0` 的複合研究與結構化 JSON 工具。這些功能不屬於已審查的 `v0.1.1` 穩定標籤。測試未發布程式碼時，請固定到明確 commit，不要依賴會移動的分支。
+## 發布狀態
 
-## 它解決什麼
+| 產品線 | 安裝 ref | Model-facing 工具 | 驗證邊界 |
+| --- | --- | --- | --- |
+| 穩定版 | `v0.1.1` | `verified_search` | 維護者驗證的 release tag，包含套件 artifact、checksums、跨平台 CI、乾淨 profile 安裝與已記錄的真實 provider conformance |
+| 實驗快照 | `c29b531a6c2e52200d454aa9ded42214ba8c0014` | 下列全部五個工具 | 2026-08-16 當時最後一個綠燈 `main` 快照；250 tests 與 42-case frozen offline corpus 全通過 |
+| 移動中的 `main` | `main` | 未發布開發碼 | 不要在可重現測試中直接安裝；不同 commit 之間的行為與 generated artifacts 可能改變 |
 
-DeepSeek Harness rc.6 原本的 `web_search` 只有一個 `query`，另一個獨立的 Flash 模型再決定是否搜尋與如何產生子查詢。預設組合也沒有完整頁面讀取，因此主 agent 常只能看到標題與 URL；「最新模型比較」可能因此混入舊版本，卻沒有足夠內容可驗證。
+> **外部獨立驗證：尚無。** Repository 提供內部 deterministic tests、CI、package reproducibility checks 與維護者執行的 conformance evidence；這些訊號不會被描述成第三方審查。
 
-此外，Harness 已經提供 `dsh-time-context`，但 rc.6 的預設 composition 沒有掛載它；這正是 [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344) 指出的時間上下文缺口。
+## 前置需求
 
-本外掛做了以下事情：
+- DeepSeek Harness `0.1.0-rc.6` 與 Cordis `4.0.1`。
+- Node.js `22.19.x` 或 `24.x`。
+- 透過 Harness credential service 或啟動環境提供 `DEEPSEEK_API_KEY`。
+- 使用原本就有搜尋能力的 preset；此外掛不會替內建 `minimal` preset 擴權。
+- CI 涵蓋 Ubuntu 與 Windows；macOS 目前不屬於正式支援契約。
 
-- 每 60 秒掛載 Harness 內建的 `dsh-time-context`；
-- 對有搜尋能力的 agent 隱藏並阻擋舊 `web_search`，但不替 `minimal` preset 擴權；
-- 提供 `verified_search`、`verified_research` 與三個有界 JSON 工具；
-- 將 1–20 個裸 ASCII hostname 正規化，拒絕 scheme、path、port、wildcard、Unicode hostname 與 IP literal；
-- 將 `allowed_domains` 傳給 provider，同時在本機對回傳的結構化來源做 hostname postfilter；
-- 在來源進入工具結果或 session 前移除 URL credential、敏感／追蹤 query 參數與 fragment；
-- 將搜尋 query 與 credential-free request envelope 先寫入 Harness 已知的 durable event，再送出 provider request；
-- 將所有遠端標題、URL、excerpt、JSON scalar 明確標成不可信資料；
-- 在有界研究完成後阻擋同一 turn 的 shell、Python、另一個搜尋或 MCP fallback，要求 agent 直接回答並列出 unresolved claims。
+更換 Harness、Cordis、Node 或 package-manager 版本前，請先閱讀[相容性契約](docs/COMPATIBILITY.md)。
 
-## 工具一覽
+## 一分鐘安裝
 
-| 工具 | 適合的任務 | 可驗證的邊界 |
-| --- | --- | --- |
-| `verified_search` | 單一、狹窄、可變動的查詢 | 回傳的結構化來源 URL 符合 allowlist；缺 excerpt 時降低信心 |
-| `verified_research` | 多來源、多實體、多欄位比較 | 每個 covered claim 都保留一段完整、連續、可見的擷取文字與 hash |
-| `verified_json_selection` | 官方 JSON feed 的截至日期最大值與同日 ties | 嚴格 RFC 6901、日期 cutoff、最大日期、所有 final ties |
-| `verified_json_numeric_extrema` | JSON 數值最大／最小與全部 ties | 使用來源中的精確 number lexeme，比較不經 IEEE-754 |
-| `verified_json_projection` | 依來源順序投影全部嚴格相符列與一層 nested array | 不排序、不猜 latest；pointer repair 必須唯一且完整記錄 |
-
-## `verified_research` 的證據契約
-
-一次呼叫可包含 1–4 個 lane，每個 lane 1–6 個 claim，整體最多 24 個 claim。每個 lane 應提供：
-
-- 明確的 `allowed_domains`；
-- 最多兩個已知的一手 `seed_urls`；
-- 一條與首次 query 不同、且不包含待驗證答案候選值的 `gap_query`；
-- 每個 claim 的 `query`、`evidence_must_include`、`value_kind` 與 typed `scope`。
-
-`evidence_must_include` 不是 regex，也不是語意裁判。它會將大小寫、Unicode 空白、常見彎引號與 dash 變體正規化後，要求每個指定片語都出現在最終保留的 excerpt。不要把未知答案本身塞進片語，否則只是讓模型確認自己的猜測。
-
-`scope` 有兩種：
-
-- `document`：用 page-global 的候選中立標記確認文件身分，可再綁定 `YYYY-MM` 文件月份；
-- `event_row`：要求 row-local 標記，並以指定月份或 `after + select:first` 選取事件列。含 `Released`、`Last Update` 等 metadata label 的列不能冒充事件日期。
-
-每個 covered claim 最多保留一段完整、連續且不超過 2,000 字元的 excerpt，並附上：
-
-- `excerptStart` / `excerptEnd`；
-- `retrievedAt`；
-- normalized page text 的 SHA-256；
-- claim status：`covered`、`blocked` 或 `missing`。
-
-Provider snippet 只用於 discovery，不能升格為已驗證證據。
-
-### 安全的完整頁面讀取
-
-頁面讀取器刻意維持狹窄邊界：
-
-- 僅接受 HTTPS 443、DNS hostname、無 URL credential；
-- DNS 回傳的每個 IP 都必須是 public address，並把已驗證 IP 綁定到實際 TLS connection；
-- 每個 redirect hop 都重新檢查 URL、allowlist、DNS 與 IP，普通 redirect 不得跨 origin；
-- 限制 redirect 次數、總時間、body idle、bytes、media type 與 content encoding；
-- UTF-8 採 fatal decode；明確宣告的 `ISO-8859-1`／`windows-1252` 依 WHATWG 對映，其餘 charset fail closed；
-- 不執行 script、不帶 cookie、不接受任意 binary 文件；
-- discovery 會略過 `/printable/pdf`、PDF、Office 與 ZIP 路徑，明確指定的 binary seed 則會留下可見失敗。
-
-唯一跨 origin 例外是精確的 EUR-Lex `uri=CELEX:...` 英文 legal-content request：必須同時 allowlist `eur-lex.europa.eu` 與 `publications.europa.eu`，才能沿官方 Publications Office resolver 取得固定格式的 Cellar XHTML 表示。這個例外由顯式狀態機約束，不適用於其他 202 或 redirect。
-
-## 結構化 JSON 工具
-
-所有 JSON 工具都先以有界 scanner 檢查 depth、duplicate key、UTF-8／Unicode，再讓 `JSON.parse` 建立物件。網路 feed 上限為 2 MiB；pure selector API 另有 8 MiB input、25,000 rows、256 ties、64 KiB scalar、4 MiB construction 與 8 MiB output 等限制。
-
-`verified_json_projection` 只投影 string、boolean 或 null。普通 `JSON.parse` 無法保留大型 JSON number 的精確 lexeme，因此 numeric filter／projection 會被拒絕；需要數值比較時改用 `verified_json_numeric_extrema`。
-
-若 JSON root 本來就是 array，但 model 誤填非空 `array_pointer`，projection 可以回到 root array，並在 `pointerAudits` 記錄 `root_array_fallback`。物件 key 只有在「唯一 ASCII case-insensitive match」時才可修復；歧義、非 ASCII 猜測或不同 row 產生不一致 repair 都會 fail closed。工具不會猜 value、filter、排序或 field alias。
-
-## 實測結果
-
-![兩個困難官方來源任務的完成率變化](docs/assets/benchmark.zh.svg)
-
-這輪以兩個不同領域、預先凍結 requested-field ledger 的困難搜尋測試目前版本：
-
-| 任務 | 修正前 | 目前實驗版 | Terminal 時間 |
-| --- | ---: | ---: | ---: |
-| Go 支援線、security fixes 與 Linux artifact provenance | 0/8 | **8/8** | 317 秒 |
-| EU AI Act 修法時序與 GPAI 過渡期限 | 0/8 | **6/8** | 307 秒 |
-| **合計** | **0/16** | **14/16（87.5%）** | — |
-
-已回答的 14 個 requested field 全部有保留的一手來源證據，grounded precision 為 14/14；沒有輸出無證據的 requested assertion。EU 剩餘兩欄明確標為 unresolved。這只是 600 秒外層上限下的單次觀測，不是標準化 benchmark、統計估計或 production SLO。延遲仍然偏高，而且兩題都超過 240 秒。
-
-## 安裝
-
-安裝已審查的穩定標籤：
+### 穩定版 `verified_search`
 
 ```powershell
 dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
@@ -109,35 +44,71 @@ dsh --profile web --dump-config
 dsh web
 ```
 
-測試尚未發布的 v0.3 workflow 時，請固定到已驗證的實驗 commit：
+等價的單行 PowerShell 指令：
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#67d337ebb754b51b703df3f690310482c0f2d14d
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
+```
+
+Release 已提交 prebuilt `lib/`，且沒有 install-time build script；固定 Git ref 安裝時，不會在使用者電腦上執行此 repository 的開發工具鏈。
+
+### 五工具實驗快照
+
+```powershell
+dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
 dsh --profile web --dump-config
 dsh web
 ```
 
-如果 deployment 已經掛載 Discussion #344 的 `time-context` row，啟動 Harness 前設定 `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1`，避免兩個 clock injector。
+這個快照只適合開發與評估。需要可重現結果時，不要把明確 commit 改成會移動的 `main`。
 
-回滾：
+如果 deployment 已掛載 Discussion #344 的 `time-context` row，請在啟動 Harness 前設定 `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1`，避免重複的 clock injector。
+
+### 回滾
 
 ```powershell
 dsh plugin --profile web remove dsh-plugin-verified-search
 dsh web
 ```
 
-## 使用範例
+## 最小 quickstart
 
-單一 first-party 查詢：
+對具搜尋能力的 agent 提出有界、帶絕對日期的問題，例如：
+
+> 找出截至 2026-08-14 的 DeepSeek 現行旗艦 API model。只使用 `api-docs.deepseek.com`。若保留來源沒有包含答案的 excerpt，請回報 unresolved，不要用記憶補答案。
+
+對應的 model-facing `verified_search` arguments：
 
 ```json
 {
-  "query": "DeepSeek current flagship model as of 2026-08-14",
-  "allowed_domains": ["deepseek.com"]
+  "query": "DeepSeek current flagship API model as of 2026-08-14",
+  "allowed_domains": ["api-docs.deepseek.com"]
 }
 ```
 
-複合研究 lane：
+預期行為：
+
+- 將原生 provider allowlist 傳給上游；
+- 在本機依精確 hostname 或 subdomain 對回傳的 structured sources 再做 postfilter；
+- credential-bearing URL 與敏感／追蹤 URL 元件會在組成 session-visible 結果前被拒絕或移除；
+- 只有標題或 URL、卻沒有保留 citation excerpt 的來源，不會升格成已驗證證據；
+- 證據缺口會保持可見，不會被舊答案或模型記憶取代。
+
+需要獨立比較來源時，另做一次不限制 domain 的查詢。Allowlist 是「回傳 structured-source hostname」的 postcondition，不是 network-egress 或 privacy boundary。
+
+## 選擇正確工具
+
+| 工具 | 適合的任務 | 有界結果 |
+| --- | --- | --- |
+| `verified_search` | 單一、狹窄、會變動的事實查詢 | Structured-source hostname postfilter，citation excerpt 缺口保持可見 |
+| `verified_research` | 多實體或多 claim 研究 | 每個 claim 的保留 excerpt、retrieval metadata、content hash 與明確 unresolved claims |
+| `verified_json_selection` | 從官方 JSON feed 做 latest／as-of 選取 | 嚴格 RFC 6901、日期 cutoff、最大日期與全部 final ties |
+| `verified_json_numeric_extrema` | JSON 的精確數值最大／最小值 | 直接比較 source lexeme、不經 IEEE-754，並保留全部 final ties |
+| `verified_json_projection` | 依來源順序取得全部嚴格相符 JSON rows | 有界 parent／nested projection、可稽核 pointer repair、不推測排序語意 |
+
+只有 `verified_search` 屬於穩定的 `v0.1.1`。其餘四個工具都屬於固定 `0.3.0-experiment.0` 快照中的實驗功能。
+
+### 複合研究範例
 
 ```json
 {
@@ -163,42 +134,108 @@ dsh web
 }
 ```
 
-## 保證與限制
+`evidence_must_include` 是正規化 substring postcondition，不是語意 entailment 裁判。不要把未知答案本身放進 required phrase，只為確認模型自己的猜測。
 
-當 `allowed_domains` 存在時，外掛回傳的每個結構化來源都必須匹配 allowlist；越界來源會在本機被移除，只回報數量，不暴露其 URL、標題或 excerpt。
+## 失敗行為
 
-但外掛**不能證明**：
+此外掛會 fail closed，或把狀態保持為明確 unresolved。
 
-- provider 的內部 candidate pool 只使用 allowlist；
-- 上游索引包含最新頁面或 ranking 的時間順序正確；
-- `page_age` 是 ISO publication date；
-- URL 或 caller-supplied seed 必然是 canonical／first-party；
-- phrase、typed value gate 或 `allClaimsCovered` 已證明語意 entailment；
-- fetched API 沒有 pagination，或已回傳完整 corpus；
-- publisher 的資料真實、單位正確、版本仍有效；
-- public allowlisted 頁面中的文字可以被當成指令執行。
+- 無效 hostname allowlist、credential-bearing URL、不安全 redirect、非 public resolved address、不支援 media、錯誤 charset 宣告、無效 UTF-8 與資源上限違規，都會產生可見失敗。
+- Structured JSON 操作會拒絕無效 JSON、duplicate key、過深 nesting、無效 pointer、缺少欄位、不支援的 numeric projection、row／tie／output 超限，以及無法取得 exact number lexeme 的 runtime。
+- Discovery 可略過已知 binary path；明確提供但不支援的 binary seed 會留下可見失敗，不會被靜默重新解讀。
+- Provider 或 fetch timeout 會中止有界工作，並保留證據缺口。
+- `allClaimsCovered`、`complete: true` 或 `truncated: false` 只描述宣告的有界操作；不證明來源新鮮度、語意 entailment、publisher authenticity、feed completeness 或 pagination 已耗盡。
 
-所以本專案只把自己描述為「可驗證的 workflow 與 structured-source postcondition」，不保證每個答案永遠正確或最新。
+## 信任與安全邊界
 
-## 開發與驗證
+此外掛可以保證：本機過濾後回傳的 structured sources 符合明確 hostname allowlist。實驗版完整頁面 reader 另將擷取限制在有界 public HTTPS target，並執行 DNS/IP validation、pinned transport、redirect checks、text/JSON media 與 charset validation，以及 byte/time limits。
+
+它**不能證明**：
+
+- provider 的私有 candidate pool 或生成 prose 只使用 allowlist；
+- provider 沒有自行擷取其他頁面或跟隨 allowlist 以外的 redirect；
+- 上游索引一定含有最新頁面，或時間 ranking 正確；
+- 保留的 phrase 已語意支持 claim，或能正確處理否定；
+- caller 指定的 seed URL 一定 canonical、first-party 或 authoritative；
+- API response 真實、完整、沒有 pagination、排序語意正確或事實正確；
+- public page 的文字可安全當成指令執行。
+
+Search query 會成為 durable Harness session data。不要把 secret、signed URL 或私人資料放進 query。私密回報與完整 threat boundary 請見 [SECURITY.md](SECURITY.md)。
+
+## 驗證快照
+
+固定的實驗快照記錄：
+
+- source commit：`c29b531a6c2e52200d454aa9ded42214ba8c0014`；
+- push CI：Ubuntu 與 Windows、Node `22.19.x` 與 `24.x` 全通過；
+- HonestCI baseline：**250 tests**，0 failures、0 errors、0 skipped；
+- frozen offline corpus：**42/42 cases**；
+- registered offline result digest：`sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`；
+- committed `lib/` 與 package-content reproducibility checks；
+- 外部獨立驗證：**尚無**。
+
+Machine-readable 的 lifecycle、runtime、capability 與 architecture facts 位於 [`capabilities.json`](capabilities.json) 和 [`architecture.json`](architecture.json)。評估方法請見 [docs/OFFLINE_EVALUATION.md](docs/OFFLINE_EVALUATION.md)、[docs/PROPERTY_TESTING.md](docs/PROPERTY_TESTING.md) 與 [docs/HONEST_CI_DOGFOOD.md](docs/HONEST_CI_DOGFOOD.md)。
+
+## 實測觀測
+
+![兩個困難官方來源任務的完成率變化](docs/assets/benchmark.zh.svg)
+
+兩個 frozen-ledger live tasks 在 600 秒外層上限下得到以下單次觀測：
+
+| 任務 | 修正前 | 實驗工作流程 | Terminal 時間 |
+| --- | ---: | ---: | ---: |
+| Go 支援 releases、security scope 與 Linux artifact provenance | 0/8 | **8/8** | 317 秒 |
+| EU AI Act 修法時序與 GPAI 過渡期限 | 0/8 | **6/8** | 307 秒 |
+| **合計** | **0/16** | **14/16（87.5%）** | — |
+
+已回答的 14 個 requested fields 都有保留的官方來源證據；另外兩欄保持 unresolved。這些只是單次觀測，不是標準化 benchmark、統計估計、latency target 或 release guarantee。兩次成功 terminal run 都超過 240 秒，因此 timeout 與 latency 仍是重要改進方向。
+
+## 設定
+
+Bundle 可從 Harness credential service 或 launch environment 讀取 `DEEPSEEK_API_KEY`。可選設定包括：
+
+| 類別 | Fields |
+| --- | --- |
+| Provider | `apiKeyEnv`、`apiKey`、`baseURL`、`model`、`apiVersion` |
+| Search limits | `maxTokens`、`maxUses`、`maxResults`、`searchTimeoutMs` |
+| Experimental research | `researchTimeoutMs`、`researchMaxResults` |
+
+`researchMaxResults` 預設為 24，範圍 4–32，而且不得低於該次呼叫宣告的 claim count。設定變更屬於 compatibility 與 resource-boundary 變更，不只是效能調參。
+
+## 開發與完整驗證
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile --ignore-scripts
 pnpm run check
 pnpm test
 pnpm run build
+pnpm run evaluate:offline
 npm pack --dry-run --ignore-scripts --json
+git diff --check
+git diff --exit-code -- lib
 ```
 
-目前測試涵蓋 hostname／legacy IP、credential-safe failure、request-before-dispatch、provider wire、allowlist postfilter、seed-first claim coverage、search barrier、abort quiescence、SSRF／redirect、charset、EUR-Lex Cellar、bounded HTML／JSON、完整 model-visible excerpt、typed claim scopes、exact numeric lexeme、all-tie retention、pointer repair、turn-scoped finalization 與 agent lifecycle。
+第二次 build 不得產生新的 `lib/` diff。Frozen offline digest 發生變化代表可能有行為改動；不要只為讓 CI 變綠就更新 expected digest。
 
-## 與 Harness 核心修復的關係
+## 文件
 
-這個外掛是可部署的相容層。對 Harness provider-neutral `ctx.web` contract 與內建 providers 的核心修復仍在 [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。若官方專案合併相同能力，本外掛可以改為額外驗證模式或退役。
+- [架構與 ownership boundaries](docs/ARCHITECTURE.md)
+- [相容性契約](docs/COMPATIBILITY.md)
+- [Frozen offline evaluation](docs/OFFLINE_EVALUATION.md)
+- [Property-testing contract](docs/PROPERTY_TESTING.md)
+- [HonestCI dogfooding evidence](docs/HONEST_CI_DOGFOOD.md)
+- [單人串行維護 roadmap](docs/ROADMAP.md)
+- [維護規則](MAINTENANCE.md)
+- [安全政策](SECURITY.md)
+- [變更紀錄](CHANGELOG.md)
+
+## 與上游核心修復的關係
+
+此 repository 是可部署的 compatibility layer。Provider-neutral Harness core change 仍位於 [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。若官方專案發布等價的有界能力，此外掛可轉為額外驗證模式，或透過有文件的 migration path 退役。
 
 ## 安全回報
 
-請透過本 repository 已啟用的 GitHub private security-advisory interface 回報 credential leak、allowlist bypass 或 unsafe page-fetch path。不要把 API key、signed URL、含私人資料的 search query、私人 excerpt 或原始 session log 貼到 public issue。
+若懷疑有 credential leak、allowlist bypass 或 unsafe page-fetch path，請使用此 repository 的 GitHub private security-advisory interface。不要把 API key、signed URL、私人 query、私人 excerpt 或 raw session log 貼到 public issue。
 
 ## License
 
