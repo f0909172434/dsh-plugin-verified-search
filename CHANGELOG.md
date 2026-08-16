@@ -32,6 +32,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   and relative-import cycles.
 - A default 20,000-byte production-module budget plus seven explicit growth stops with lower
   targets, next extraction steps, and removal conditions for existing architecture debt.
+- A 242-test HonestCI baseline candidate derived from completed default-branch run
+  `31936017824` after the architecture guard added five durable contract tests.
 
 ### Changed
 
@@ -43,10 +45,13 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   reviewed baselines and corpus files remain committed.
 - The initial HonestCI baseline was activated by default-branch run `31932149983`, which
   observed 222 tests against 222 with zero drop and no findings.
-- The 237-test baseline is active: default-branch run `31934852209` observed 237 tests against
-  237 with zero failures, errors, skipped tests, test-count drop, or findings across Ubuntu
-  and Windows on Node 22.19 and 24.
-- The same activation run reproduced all 42 offline cases with result digest
+- The 237-test baseline was activated by default-branch run `31934852209`, which observed 237
+  tests against 237 with zero failures, errors, skipped tests, test-count drop, or findings
+  across Ubuntu and Windows on Node 22.19 and 24.
+- The architecture-guard run observed 242 tests against the prior 237-test baseline with zero
+  failures, errors, skipped tests, drop, or findings; activation of the new baseline remains
+  subject to a later default-branch confirmation.
+- The same architecture run reproduced all 42 offline cases with result digest
   `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
   per-capability counts, offline execution boundary, and source architecture contract.
