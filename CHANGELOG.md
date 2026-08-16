@@ -27,6 +27,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   production selectors.
 - A revised 237-test HonestCI baseline derived from completed default-branch run
   `31934602305`, after the offline corpus and property suites were merged.
+- Machine-readable five-layer source architecture, package-bound schema, and CI guard for
+  complete source classification, resolved imports, dependency direction, Harness isolation,
+  and relative-import cycles.
+- A default 20,000-byte production-module budget plus seven explicit growth stops with lower
+  targets, next extraction steps, and removal conditions for existing architecture debt.
 
 ### Changed
 
@@ -44,9 +49,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
 - The same activation run reproduced all 42 offline cases with result digest
   `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`.
 - `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
-  per-capability counts, and offline execution boundary.
+  per-capability counts, offline execution boundary, and source architecture contract.
 - Property failures now include a replayable hexadecimal seed and iteration number; generator
   seeds and bounds are documented rather than taken from wall-clock entropy.
+- New production files must be assigned to one architecture layer, and existing oversized
+  modules may shrink but may not cross their recorded ceilings before decomposition.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
@@ -69,8 +76,10 @@ release and must be installed by an exact commit when evaluated.
 - The offline corpus and generated properties cover deterministic bounded primitives; only
   two larger live official-source tasks have been recorded, so broad retrieval-quality claims
   remain unsupported.
-- Passing repository tests, properties, or the offline corpus does not constitute a live
-  provider or clean Harness installation result.
+- Passing repository tests, properties, the offline corpus, or the architecture guard does not
+  constitute a live provider or clean Harness installation result.
+- Seven production modules remain above the default size budget and are tracked as temporary
+  architecture debt rather than described as complete modularization.
 
 ## 0.1.1 — 2026-08-14
 
