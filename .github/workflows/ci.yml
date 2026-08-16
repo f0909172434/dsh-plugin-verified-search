@@ -38,8 +38,24 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Type-check source and tests
         run: pnpm run check
-      - name: Run full test suite
-        run: pnpm test
+      - name: Run tests through HonestCI
+        id: honest_ci
+        uses: f0909172434/honest-ci@4ee4e30b283c219ff42e75606e692f34c91ba826 # v1.0.4
+        with:
+          command: pnpm test -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
+          config: honest-ci.yml
+          github-token: ${{ github.token }}
+          evidence-output: .honest-ci/evidence.json
+      - name: Upload HonestCI evidence and JUnit report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: honest-ci-evidence-${{ github.run_attempt }}
+          path: |
+            .honest-ci/evidence.json
+            reports/junit.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Build distributable artifacts
         run: pnpm run build
       - name: Require committed prebuilt artifacts to reproduce
