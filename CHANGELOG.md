@@ -30,10 +30,14 @@ This project separates reviewed releases from unreleased experiments. Dates use 
 - Machine-readable five-layer source architecture, package-bound schema, and CI guard for
   complete source classification, resolved imports, dependency direction, Harness isolation,
   and relative-import cycles.
-- A default 20,000-byte production-module budget plus seven explicit growth stops with lower
+- A default 20,000-byte production-module budget plus explicit growth stops with lower
   targets, next extraction steps, and removal conditions for existing architecture debt.
 - A revised 242-test HonestCI baseline derived from completed default-branch run
   `31936017824` after the architecture guard added five durable contract tests.
+- Shared engine-layer strict-JSON primitives for UTF-8 and Unicode checks, duplicate-key and
+  depth scanning, bounded RFC 6901 parsing, and Gregorian/UTC date normalization.
+- Direct behavior tests for the shared primitive failure boundary, pointer decoding, date
+  validation, strict parsing, UTF-8 decoding, and caller-provided limits.
 
 ### Changed
 
@@ -59,6 +63,10 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   seeds and bounds are documented rather than taken from wall-clock entropy.
 - New production files must be assigned to one architecture layer, and existing oversized
   modules may shrink but may not cross their recorded ceilings before decomposition.
+- `json-selection.ts` now delegates shared parsing and date rules through a caller-specific
+  error adapter. Its public result shape and `JSON_SELECTION_*` vocabulary remain unchanged.
+- The date selector and its new primitive module both fit the 20,000-byte default budget, so
+  the `json-selection.ts` architecture exception has been removed; six growth stops remain.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
@@ -83,7 +91,7 @@ release and must be installed by an exact commit when evaluated.
   remain unsupported.
 - Passing repository tests, properties, the offline corpus, or the architecture guard does not
   constitute a live provider or clean Harness installation result.
-- Seven production modules remain above the default size budget and are tracked as temporary
+- Six production modules remain above the default size budget and are tracked as temporary
   architecture debt rather than described as complete modularization.
 
 ## 0.1.1 — 2026-08-14

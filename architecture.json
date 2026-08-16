@@ -35,6 +35,7 @@
       "files": [
         "src/evidence.ts",
         "src/json-numeric-selection.ts",
+        "src/json-primitives.ts",
         "src/json-projection.ts",
         "src/json-selection.ts",
         "src/offline-evaluation.ts",
@@ -104,8 +105,8 @@
       "max_bytes": 30000,
       "target_bytes": 20000,
       "reason": "Lossless number scanning, exact decimal comparison, request validation, and selection remain in one engine.",
-      "next_extraction": "Extract shared strict-JSON and RFC 6901 primitives without weakening module-specific error codes.",
-      "removal_condition": "Remove this exception after shared primitives are extracted and the selector is within the default budget."
+      "next_extraction": "Adopt the shared strict-JSON and RFC 6901 primitives without weakening module-specific error codes.",
+      "removal_condition": "Remove this exception after shared primitives are adopted and the selector is within the default budget."
     },
     {
       "path": "src/json-projection.ts",
@@ -113,17 +114,8 @@
       "max_bytes": 32000,
       "target_bytes": 20000,
       "reason": "Strict parsing, pointer repair audits, nested projection, and output budgeting are still colocated.",
-      "next_extraction": "Extract shared strict-JSON and pointer-resolution primitives, then isolate nested projection.",
+      "next_extraction": "Adopt shared strict-JSON primitives, then isolate repair-aware pointer resolution and nested projection.",
       "removal_condition": "Remove this exception when the projection engine and extracted modules each satisfy the default budget."
-    },
-    {
-      "path": "src/json-selection.ts",
-      "baseline_bytes": 24306,
-      "max_bytes": 25000,
-      "target_bytes": 20000,
-      "reason": "Strict JSON validation, date normalization, pointer resolution, and maximum-tie selection are colocated.",
-      "next_extraction": "Move shared strict-JSON, ISO-date, and RFC 6901 utilities into engine-layer modules.",
-      "removal_condition": "Remove this exception when the date selector falls below the default budget."
     },
     {
       "path": "src/offline-evaluation.ts",
