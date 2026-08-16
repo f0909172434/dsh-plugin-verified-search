@@ -31,13 +31,15 @@ export type OfflineEvaluationOperation =
   | 'json_numeric_selection'
   | 'json_projection'
 
+export type OfflineJsonObject = { readonly [key: string]: OfflineJsonValue }
+
 export type OfflineJsonValue =
   | null
   | boolean
   | number
   | string
   | readonly OfflineJsonValue[]
-  | { readonly [key: string]: OfflineJsonValue }
+  | OfflineJsonObject
 
 export interface OfflineEvaluationAssertion {
   readonly pointer: string
@@ -165,6 +167,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isOfflineJsonObject(value: OfflineJsonValue): value is OfflineJsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function assertExactKeys(
   value: Record<string, unknown>,
   allowedKeys: readonly string[],
@@ -188,15 +194,17 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 }
 
 function requireString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) contractFail(`${label} must be a non-empty string`)
+  if (typeof value !== 'string' || value.length === 0) {
+    contractFail(`${label} must be a non-empty string`)
+  }
   return value
 }
 
 function requireInteger(value: unknown, label: string, minimum = 0): number {
-  if (!Number.isSafeInteger(value) || (value as number) < minimum) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
     contractFail(`${label} must be a safe integer >= ${minimum}`)
   }
-  return value as number
+  return value
 }
 
 function requireStringArray(value: unknown, label: string): readonly string[] {
@@ -210,7 +218,9 @@ function requireJsonValue(value: unknown, label: string): OfflineJsonValue {
     if (!Number.isFinite(value)) contractFail(`${label} must not contain a non-finite number`)
     return value
   }
-  if (Array.isArray(value)) return value.map((entry, index) => requireJsonValue(entry, `${label}[${index}]`))
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => requireJsonValue(entry, `${label}[${index}]`))
+  }
   if (isRecord(value)) {
     const result: Record<string, OfflineJsonValue> = {}
     for (const [key, entry] of Object.entries(value)) {
@@ -237,33 +247,33 @@ function parseOperation(value: unknown, label: string): OfflineEvaluationOperati
 
 function parseExpected(value: unknown, label: string): OfflineEvaluationExpectation {
   const record = requireRecord(value, label)
-  const status = record.status
-  if (status === 'pass') {
+  if (record.status === 'pass') {
     assertExactKeys(record, ['status', 'assertions'], ['status', 'assertions'], label)
     if (!Array.isArray(record.assertions) || record.assertions.length === 0) {
       contractFail(`${label}.assertions must be a non-empty array`)
     }
     return {
-      status,
+      status: 'pass',
       assertions: record.assertions.map((raw, index) => {
-        const assertion = requireRecord(raw, `${label}.assertions[${index}]`)
-        assertExactKeys(assertion, ['pointer', 'equals'], ['pointer', 'equals'], `${label}.assertions[${index}]`)
-        const pointer = typeof assertion.pointer === 'string'
-          ? assertion.pointer
-          : contractFail(`${label}.assertions[${index}].pointer must be a string`)
-        if (pointer !== '' && !pointer.startsWith('/')) {
-          contractFail(`${label}.assertions[${index}].pointer must be an RFC 6901 JSON Pointer`)
+        const assertionLabel = `${label}.assertions[${index}]`
+        const assertion = requireRecord(raw, assertionLabel)
+        assertExactKeys(assertion, ['pointer', 'equals'], ['pointer', 'equals'], assertionLabel)
+        if (typeof assertion.pointer !== 'string') {
+          contractFail(`${assertionLabel}.pointer must be a string`)
+        }
+        if (assertion.pointer !== '' && !assertion.pointer.startsWith('/')) {
+          contractFail(`${assertionLabel}.pointer must be an RFC 6901 JSON Pointer`)
         }
         return {
-          pointer,
-          equals: requireJsonValue(assertion.equals, `${label}.assertions[${index}].equals`),
+          pointer: assertion.pointer,
+          equals: requireJsonValue(assertion.equals, `${assertionLabel}.equals`),
         }
       }),
     }
   }
-  if (status === 'error') {
+  if (record.status === 'error') {
     assertExactKeys(record, ['status', 'code'], ['status', 'code'], label)
-    return { status, code: requireString(record.code, `${label}.code`) }
+    return { status: 'error', code: requireString(record.code, `${label}.code`) }
   }
   contractFail(`${label}.status must be "pass" or "error"`)
 }
@@ -310,7 +320,9 @@ export function parseOfflineEvaluationSuite(value: unknown): OfflineEvaluationSu
   const cases = record.cases.map((entry, index) => parseCase(entry, `suite.cases[${index}]`))
   const ids = new Set<string>()
   for (const testCase of cases) {
-    if (testCase.capability !== capability) contractFail(`case ${testCase.id} does not match suite capability`)
+    if (testCase.capability !== capability) {
+      contractFail(`case ${testCase.id} does not match suite capability`)
+    }
     if (ids.has(testCase.id)) contractFail(`suite contains duplicate case ID ${testCase.id}`)
     ids.add(testCase.id)
   }
@@ -333,32 +345,35 @@ export function parseOfflineEvaluationManifest(value: unknown): OfflineEvaluatio
   )
   if (record.$schema !== './manifest.schema.json') contractFail('manifest.$schema is not registered')
   if (record.schemaVersion !== '1.0.0') contractFail('manifest.schemaVersion is not supported')
-  if (record.networkAccessRequired !== false) contractFail('offline corpus must declare networkAccessRequired=false')
+  if (record.networkAccessRequired !== false) {
+    contractFail('offline corpus must declare networkAccessRequired=false')
+  }
   if (!Array.isArray(record.suites) || record.suites.length === 0) {
     contractFail('manifest.suites must be a non-empty array')
   }
   const suites = record.suites.map((raw, index): OfflineEvaluationManifestSuite => {
-    const suite = requireRecord(raw, `manifest.suites[${index}]`)
+    const label = `manifest.suites[${index}]`
+    const suite = requireRecord(raw, label)
     assertExactKeys(
       suite,
       ['capability', 'suiteId', 'file', 'sha256', 'caseCount'],
       ['capability', 'suiteId', 'file', 'sha256', 'caseCount'],
-      `manifest.suites[${index}]`,
+      label,
     )
-    const file = requireString(suite.file, `manifest.suites[${index}].file`)
+    const file = requireString(suite.file, `${label}.file`)
     if (file.includes('/') || file.includes('\\') || file === '.' || file === '..') {
-      contractFail(`manifest.suites[${index}].file must be a basename`)
+      contractFail(`${label}.file must be a basename`)
     }
-    const sha256 = requireString(suite.sha256, `manifest.suites[${index}].sha256`)
+    const sha256 = requireString(suite.sha256, `${label}.sha256`)
     if (!/^sha256:[0-9a-f]{64}$/u.test(sha256)) {
-      contractFail(`manifest.suites[${index}].sha256 must be a lowercase SHA-256 digest`)
+      contractFail(`${label}.sha256 must be a lowercase SHA-256 digest`)
     }
     return {
-      capability: parseCapability(suite.capability, `manifest.suites[${index}].capability`),
-      suiteId: requireString(suite.suiteId, `manifest.suites[${index}].suiteId`),
+      capability: parseCapability(suite.capability, `${label}.capability`),
+      suiteId: requireString(suite.suiteId, `${label}.suiteId`),
       file,
       sha256,
-      caseCount: requireInteger(suite.caseCount, `manifest.suites[${index}].caseCount`, 1),
+      caseCount: requireInteger(suite.caseCount, `${label}.caseCount`, 1),
     }
   })
   return {
@@ -374,6 +389,42 @@ export function parseOfflineEvaluationManifest(value: unknown): OfflineEvaluatio
 
 export function sha256Prefixed(value: string | Uint8Array): string {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
+function canonicalValue(value: OfflineJsonValue): OfflineJsonValue {
+  if (Array.isArray(value)) return value.map(canonicalValue)
+  if (isOfflineJsonObject(value)) {
+    const result: Record<string, OfflineJsonValue> = {}
+    for (const key of Object.keys(value).sort()) {
+      result[key] = canonicalValue(value[key]!)
+    }
+    return result
+  }
+  return value
+}
+
+function canonicalJson(value: OfflineJsonValue): string {
+  return JSON.stringify(canonicalValue(value))
+}
+
+function decodeSuiteBytes(bytes: Uint8Array, file: string): OfflineEvaluationSuite {
+  let text: string
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch (error: unknown) {
+    throw new OfflineEvaluationContractError(
+      `suite ${file} is not valid UTF-8: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error: unknown) {
+    throw new OfflineEvaluationContractError(
+      `suite ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+  return parseOfflineEvaluationSuite(value)
 }
 
 export function verifyOfflineEvaluationBundle(
@@ -402,17 +453,22 @@ export function verifyOfflineEvaluationBundle(
     if (sha256Prefixed(loaded.bytes) !== expected.sha256) {
       contractFail(`suite hash mismatch for ${expected.file}`)
     }
-    if (loaded.suite.suiteId !== expected.suiteId) {
+    const parsedFromBytes = decodeSuiteBytes(loaded.bytes, expected.file)
+    if (canonicalJson(requireJsonValue(parsedFromBytes, expected.file))
+      !== canonicalJson(requireJsonValue(loaded.suite, `${expected.file} parsed suite`))) {
+      contractFail(`loaded suite object does not match exact bytes: ${expected.file}`)
+    }
+    if (parsedFromBytes.suiteId !== expected.suiteId) {
       contractFail(`suite ID mismatch for ${expected.file}`)
     }
-    if (loaded.suite.capability !== expected.capability) {
+    if (parsedFromBytes.capability !== expected.capability) {
       contractFail(`suite capability mismatch for ${expected.file}`)
     }
-    if (loaded.suite.cases.length !== expected.caseCount) {
+    if (parsedFromBytes.cases.length !== expected.caseCount) {
       contractFail(`suite case count mismatch for ${expected.file}`)
     }
-    caseCount += loaded.suite.cases.length
-    for (const testCase of loaded.suite.cases) {
+    caseCount += parsedFromBytes.cases.length
+    for (const testCase of parsedFromBytes.cases) {
       if (globalIds.has(testCase.id)) contractFail(`corpus contains duplicate case ID ${testCase.id}`)
       globalIds.add(testCase.id)
     }
@@ -448,9 +504,12 @@ function executeOperation(testCase: OfflineEvaluationCase): unknown {
       const rawSources = testCase.payload.sources
       if (!Array.isArray(rawSources)) contractFail(`${label}.sources must be an array`)
       const sources = rawSources.map((raw, index) => {
-        const source = requireRecord(raw, `${label}.sources[${index}]`)
-        requireString(source.url, `${label}.sources[${index}].url`)
-        return requireJsonValue(source, `${label}.sources[${index}]`) as Readonly<Record<string, OfflineJsonValue>> & { readonly url: string }
+        const sourceLabel = `${label}.sources[${index}]`
+        const source = requireRecord(raw, sourceLabel)
+        const url = requireString(source.url, `${sourceLabel}.url`)
+        const jsonSource = requireJsonValue(source, sourceLabel)
+        if (!isOfflineJsonObject(jsonSource)) contractFail(`${sourceLabel} must remain an object`)
+        return { ...jsonSource, url }
       })
       return filterAllowedSources(
         sources,
@@ -475,25 +534,13 @@ function executeOperation(testCase: OfflineEvaluationCase): unknown {
   }
 }
 
-function canonicalValue(value: OfflineJsonValue): OfflineJsonValue {
-  if (Array.isArray(value)) return value.map(canonicalValue)
-  if (value !== null && typeof value === 'object') {
-    const result: Record<string, OfflineJsonValue> = {}
-    for (const key of Object.keys(value).sort()) result[key] = canonicalValue(value[key]!)
-    return result
-  }
-  return value
-}
-
-function canonicalJson(value: OfflineJsonValue): string {
-  return JSON.stringify(canonicalValue(value))
-}
-
 function pointerSegments(pointer: string): readonly string[] {
   if (pointer === '') return []
   if (!pointer.startsWith('/')) contractFail(`assertion pointer must start with '/': ${pointer}`)
   return pointer.slice(1).split('/').map((segment) => {
-    if (/~(?:[^01]|$)/u.test(segment)) contractFail(`assertion pointer has an invalid escape: ${pointer}`)
+    if (/~(?:[^01]|$)/u.test(segment)) {
+      contractFail(`assertion pointer has an invalid escape: ${pointer}`)
+    }
     return segment.replace(/~1/gu, '/').replace(/~0/gu, '~')
   })
 }
@@ -512,7 +559,7 @@ function resolveAssertionPointer(root: OfflineJsonValue, pointer: string): Offli
       value = value[index]!
       continue
     }
-    if (value === null || typeof value !== 'object' || !Object.prototype.hasOwnProperty.call(value, segment)) {
+    if (!isOfflineJsonObject(value) || !Object.prototype.hasOwnProperty.call(value, segment)) {
       contractFail(`assertion pointer was not found: ${pointer}`)
     }
     value = value[segment]!
@@ -537,8 +584,7 @@ function evaluateCase(testCase: OfflineEvaluationCase): OfflineEvaluationCaseRes
   const failures: string[] = []
 
   try {
-    const rawResult = executeOperation(testCase)
-    const result = requireJsonValue(rawResult, `case ${testCase.id} result`)
+    const result = requireJsonValue(executeOperation(testCase), `case ${testCase.id} result`)
     observedStatus = 'pass'
     observedSha256 = sha256Prefixed(canonicalJson(result))
     if (testCase.expected.status === 'error') {
