@@ -60,8 +60,8 @@ RFC 6901 pointer parsing, and Gregorian/UTC date normalization. Callers provide 
 adapter, so the shared implementation does not replace each public tool's stable error-code
 vocabulary. `json-lossless-number.ts` builds on that boundary to preserve exact JSON number
 lexemes, normalize arbitrary decimal exponents, and compare values without IEEE-754 collapse.
-The date and numeric selectors are migrated consumers; strict projection remains the next
-JSON-engine extraction.
+The date selector, numeric selector, and projection strict parser are migrated consumers;
+repair-aware projection resolution and construction remain the next JSON-engine extraction.
 
 `provider.ts` belongs here because it owns the provider wire contract and sanitization rather
 than plugin registration. `page-fetch.ts` may call that sanitization, but neither module may
@@ -128,7 +128,7 @@ The remaining baseline measurements were recorded at main commit
 | --- | ---: | ---: | ---: | --- |
 | `research.ts` | 66,102 | 67,000 | 20,000 | request normalization, then lane execution |
 | `evidence.ts` | 43,903 | 45,000 | 20,000 | HTML/text normalization |
-| `json-projection.ts` | 31,362 | 32,000 | 20,000 | adopt shared parsing, then repair-aware resolution |
+| `json-projection.ts` | 31,362 | 32,000 | 20,000 | repair-aware resolution, nested projection, and construction budgeting |
 | `offline-evaluation.ts` | 24,859 | 26,000 | 20,000 | corpus parsing/integrity |
 | `page-fetch.ts` | 24,821 | 26,000 | 20,000 | address policy and transport state |
 
@@ -136,27 +136,36 @@ The first extraction reduced `json-selection.ts` from its 24,306-byte baseline t
 bytes and moved 9,468 bytes of reusable parsing policy into `json-primitives.ts`. The second
 reduced `json-numeric-selection.ts` from its 29,228-byte baseline to 19,516 bytes and moved
 5,201 bytes of exact-number parsing and comparison into `json-lossless-number.ts`. All four
-modules now satisfy the default budget, so both selector exceptions have been removed. A
-feature PR may not increase any remaining ceiling. If necessary work would cross a ceiling,
-the required extraction is part of that PR or precedes it in a separate PR.
+modules satisfy the default budget, so both selector exceptions have been removed.
+
+The projection parser migration removes its duplicate scanner and input decoder, reducing
+`json-projection.ts` from 31,362 to 26,624 bytes without forcing an unrelated resolution-core
+extraction into the same change. Its exception remains until repair-aware traversal, audit
+construction, nested source-order projection, and construction budgeting have coherent owners
+at or below the default budget. Five growth stops therefore remain. A feature PR may not
+increase any remaining ceiling. If necessary work would cross a ceiling, the required
+extraction is part of that PR or precedes it in a separate PR.
 
 ## Decomposition order
 
 The staged order is chosen to reduce duplicated correctness logic before moving orchestration:
 
-1. **Shared strict JSON primitives — in progress.** The bounded scanner, input decoding,
-   RFC 6901 parsing, ISO-date normalization, exact number-token capture, and decimal comparison
-   now live in bounded engine modules. Date and numeric selection use them without changing
-   public errors. Migrate strict projection next while retaining pointer-repair semantics.
-2. **Research request normalization.** Move input validation and normalized claim/lane types
+1. **Shared strict JSON primitives — complete for current consumers.** The bounded scanner,
+   input decoding, RFC 6901 parsing, ISO-date normalization, exact number-token capture, and
+   decimal comparison live in bounded engine modules. Date selection, numeric selection, and
+   projection parsing consume them through caller-owned error adapters.
+2. **Projection resolution core.** Isolate repair-aware pointer traversal, compatible repair
+   selection, repair audits, nested source-order projection, and construction budgeting. Keep
+   public projection schemas, errors, source order, and output bounds unchanged.
+3. **Research request normalization.** Move input validation and normalized claim/lane types
    out of `research.ts` without changing tool schemas or network behavior.
-3. **Research lane execution.** Separate bounded search/fetch work from aggregation and
+4. **Research lane execution.** Separate bounded search/fetch work from aggregation and
    presentation; preserve concurrency, source limits, and finalization policy.
-4. **Evidence normalization.** Split HTML/text normalization from claim attribution and
+5. **Evidence normalization.** Split HTML/text normalization from claim attribution and
    excerpt construction; keep content hashes and retained excerpts byte-stable.
-5. **Network policy and transport.** Isolate public-address classification from HTTPS state
+6. **Network policy and transport.** Isolate public-address classification from HTTPS state
    handling only after the existing transport and property tests can exercise both modules.
-6. **Offline evaluator parsing.** Separate manifest/suite integrity from operation dispatch
+7. **Offline evaluator parsing.** Separate manifest/suite integrity from operation dispatch
    before the corpus gains another capability.
 
 Only one consumer migration or extraction is performed at a time. A refactor is accepted when
