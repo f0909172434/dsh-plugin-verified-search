@@ -1,0 +1,247 @@
+{
+  "$schema": "./suite.schema.json",
+  "capability": "json_projection",
+  "cases": [
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "5e24aa7cd91778ab864ff4faa1a97b056de2187aa424b0d3d04a8e93778d9b8f", "pointer": "/evidenceSha256" },
+          { "equals": 3, "pointer": "/rowCount" },
+          { "equals": 2, "pointer": "/matchCount" },
+          { "equals": 0, "pointer": "/rows/0/sourceIndex" },
+          { "equals": "a", "pointer": "/rows/0/values/id" },
+          { "equals": 2, "pointer": "/rows/1/sourceIndex" },
+          { "equals": "c", "pointer": "/rows/1/values/id" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-source-order",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"keep\":true,\"title\":\"First\"},{\"id\":\"b\",\"keep\":false,\"title\":\"Hidden\"},{\"id\":\"c\",\"keep\":true,\"title\":\"Third\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "title", "pointer": "/title" }
+          ],
+          "where": [
+            { "equals": true, "pointer": "/keep" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "e2cb4e8167697f58352940326c25ff0e7e848069512c3da26e6ca2ca64f2bbeb", "pointer": "/evidenceSha256" },
+          { "equals": "a", "pointer": "/rows/0/values/id" },
+          { "equals": "/Rows", "pointer": "/pointerAudits/array/effectivePointer" },
+          { "equals": "ascii_case", "pointer": "/pointerAudits/array/repairs/0/kind" },
+          { "equals": "/ID", "pointer": "/pointerAudits/project/0/effectivePointer" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-ascii-case-repair",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"Rows\":[{\"ID\":\"a\",\"Title\":\"One\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "id", "pointer": "/id" },
+            { "name": "title", "pointer": "/title" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "e0c44d4eca74e0d274e4064584afa4cb07bafe23a6e9485328e765d9747e3c22", "pointer": "/evidenceSha256" },
+          { "equals": 2, "pointer": "/rowCount" },
+          { "equals": 2, "pointer": "/matchCount" },
+          { "equals": "", "pointer": "/pointerAudits/array/effectivePointer" },
+          { "equals": "root_array_fallback", "pointer": "/pointerAudits/array/repairs/0/kind" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-root-array-fallback",
+      "operation": "json_projection",
+      "payload": {
+        "input": "[{\"id\":\"a\"},{\"id\":\"b\"}]",
+        "request": {
+          "arrayPointer": "/items",
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "8b506cfc4d251402732af64813208927ed140a7e4a2969817013d20aa775ead0", "pointer": "/evidenceSha256" },
+          { "equals": 1, "pointer": "/matchCount" },
+          { "equals": 2, "pointer": "/rows/0/nested/rowCount" },
+          { "equals": 1, "pointer": "/rows/0/nested/matchCount" },
+          { "equals": "a", "pointer": "/rows/0/nested/rows/0/values/code" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-nested",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"parents\":[{\"active\":true,\"id\":\"p1\",\"items\":[{\"code\":\"a\",\"visible\":true},{\"code\":\"b\",\"visible\":false}]},{\"active\":false,\"id\":\"p2\",\"items\":[{\"code\":\"c\",\"visible\":true}]}]}",
+        "request": {
+          "arrayPointer": "/parents",
+          "nested": {
+            "arrayPointer": "/items",
+            "project": [
+              { "name": "code", "pointer": "/code" }
+            ],
+            "where": [
+              { "equals": true, "pointer": "/visible" }
+            ]
+          },
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ],
+          "where": [
+            { "equals": true, "pointer": "/active" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": { "code": "JSON_PROJECTION_NUMERIC_PROJECTION_UNSUPPORTED", "status": "error" },
+      "id": "projection-numeric-unsupported",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"count\":1}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "count", "pointer": "/count" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": { "code": "JSON_PROJECTION_AMBIGUOUS_POINTER_REPAIR", "status": "error" },
+      "id": "projection-ambiguous-case",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"Rows\":[{\"id\":\"a\"}],\"ROWS\":[{\"id\":\"b\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": { "code": "JSON_PROJECTION_INCONSISTENT_POINTER_REPAIR", "status": "error" },
+      "id": "projection-inconsistent-repair",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"Title\":\"a\"},{\"TITLE\":\"b\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "title", "pointer": "/title" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "a971bd88ae1cfda915690edee320cd313896a3a22605926e2efccc0f2229ac1c", "pointer": "/evidenceSha256" },
+          { "equals": "x", "pointer": "/rows/0/values/slash" },
+          { "equals": "y", "pointer": "/rows/0/values/tilde" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-escaped-pointer",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"a/b\":\"x\",\"m~n\":\"y\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "slash", "pointer": "/a~1b" },
+            { "name": "tilde", "pointer": "/m~0n" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": { "code": "JSON_PROJECTION_DUPLICATE_KEY", "status": "error" },
+      "id": "projection-duplicate-key",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"id\":\"b\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": { "code": "JSON_PROJECTION_NON_SCALAR_PROJECTION", "status": "error" },
+      "id": "projection-non-scalar",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"id\":\"a\",\"meta\":{\"x\":\"y\"}}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "meta", "pointer": "/meta" }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_projection",
+      "expected": {
+        "assertions": [
+          { "equals": "c3d9a351d19a00344e2cbab76eac1baa7a009e301cc261acc88ecf2283abf611", "pointer": "/evidenceSha256" },
+          { "equals": 2, "pointer": "/rowCount" },
+          { "equals": 1, "pointer": "/matchCount" },
+          { "equals": "a", "pointer": "/rows/0/values/id" }
+        ],
+        "status": "pass"
+      },
+      "id": "projection-null-where",
+      "operation": "json_projection",
+      "payload": {
+        "input": "{\"rows\":[{\"channel\":null,\"id\":\"a\"},{\"channel\":\"stable\",\"id\":\"b\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "project": [
+            { "name": "id", "pointer": "/id" }
+          ],
+          "where": [
+            { "equals": null, "pointer": "/channel" }
+          ]
+        }
+      }
+    }
+  ],
+  "schemaVersion": "1.0.0",
+  "suiteId": "projection-v1"
+}
