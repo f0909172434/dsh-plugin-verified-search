@@ -1,0 +1,434 @@
+{
+  "$schema": "./suite.schema.json",
+  "capability": "json_date_selection",
+  "cases": [
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "980d8ba991d49ebc1611a9a27ace213d8aa5b2fcb0cb1dbdb03a69c939e6cc67",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": 4,
+            "pointer": "/rowsScanned"
+          },
+          {
+            "equals": 3,
+            "pointer": "/rowsEligible"
+          },
+          {
+            "equals": 2,
+            "pointer": "/tieCount"
+          },
+          {
+            "equals": "2026-02-01",
+            "pointer": "/max/value"
+          },
+          {
+            "equals": 1,
+            "pointer": "/rows/0/sourceIndex"
+          },
+          {
+            "equals": "b",
+            "pointer": "/rows/0/values/id"
+          },
+          {
+            "equals": 2,
+            "pointer": "/rows/1/sourceIndex"
+          },
+          {
+            "equals": "c",
+            "pointer": "/rows/1/values/id"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-latest-cutoff",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-01-01\",\"id\":\"a\"},{\"date\":\"2026-02-01\",\"id\":\"b\"},{\"date\":\"2026-02-01T23:59:59Z\",\"id\":\"c\"},{\"date\":\"2026-03-01\",\"id\":\"future\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-02-28",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            },
+            {
+              "name": "date",
+              "pointer": "/date"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "d7b22af331fa21a2f561552315e00cb0d8431be124e9d4d68a0aa3c8eabe3183",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": 2,
+            "pointer": "/rowsEligible"
+          },
+          {
+            "equals": 1,
+            "pointer": "/tieCount"
+          },
+          {
+            "equals": "2026-03-10",
+            "pointer": "/max/value"
+          },
+          {
+            "equals": "3",
+            "pointer": "/rows/0/values/version"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-where-filter",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"releases\":[{\"date\":\"2026-01-10\",\"region\":\"us\",\"version\":\"1\"},{\"date\":\"2026-02-10\",\"region\":\"eu\",\"version\":\"2\"},{\"date\":\"2026-03-10\",\"region\":\"us\",\"version\":\"3\"}]}",
+        "request": {
+          "arrayPointer": "/releases",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "version",
+              "pointer": "/version"
+            },
+            {
+              "name": "region",
+              "pointer": "/region"
+            }
+          ],
+          "where": [
+            {
+              "equals": "us",
+              "pointer": "/region"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "bd51d091884749a57e6414c3e390190abf3914c4b52ca5a6f9b4ca90e7542d3f",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": "",
+            "pointer": "/arrayPointer"
+          },
+          {
+            "equals": 2,
+            "pointer": "/rowsScanned"
+          },
+          {
+            "equals": "new",
+            "pointer": "/rows/0/values/id"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-root-array",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "[{\"date\":\"2025-12-31\",\"id\":\"old\"},{\"date\":\"2026-01-01\",\"id\":\"new\"}]",
+        "request": {
+          "arrayPointer": "",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "24266e14e3be0178095236090ae9cc5bbdc4ae099ba4f56fb25e8764981af5cc",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": 2,
+            "pointer": "/tieCount"
+          },
+          {
+            "equals": "2026-04-05",
+            "pointer": "/max/value"
+          },
+          {
+            "equals": "a",
+            "pointer": "/rows/0/values/id"
+          },
+          {
+            "equals": "b",
+            "pointer": "/rows/1/values/id"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-rfc3339-normalization",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"events\":[{\"at\":\"2026-04-05T00:00:00Z\",\"id\":\"a\"},{\"at\":\"2026-04-05T23:59:59.123Z\",\"id\":\"b\"},{\"at\":\"2026-04-04\",\"id\":\"c\"}]}",
+        "request": {
+          "arrayPointer": "/events",
+          "filter": {
+            "lte": "2026-04-05",
+            "pointer": "/at"
+          },
+          "max": {
+            "pointer": "/at"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            },
+            {
+              "name": "at",
+              "pointer": "/at"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "code": "JSON_SELECTION_NO_MATCH",
+        "status": "error"
+      },
+      "id": "date-no-match",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-06-01\",\"id\":\"a\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-05-01",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "code": "JSON_SELECTION_DUPLICATE_KEY",
+        "status": "error"
+      },
+      "id": "date-duplicate-key",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-01-01\",\"date\":\"2026-02-01\",\"id\":\"a\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "code": "JSON_SELECTION_POINTER_NOT_FOUND",
+        "status": "error"
+      },
+      "id": "date-pointer-not-found",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-01-01\",\"id\":\"a\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/missing"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "code": "JSON_SELECTION_INVALID_ISO_DATE",
+        "status": "error"
+      },
+      "id": "date-invalid-calendar",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-02-30\",\"id\":\"a\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "4a9fe531a58f7f209595fb23056eeb7a9155a3ca667b819f663a38e48a33eb01",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": "x",
+            "pointer": "/rows/0/values/id"
+          },
+          {
+            "equals": "2026-05-01",
+            "pointer": "/max/value"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-escaped-pointer",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"release/date\":\"2026-05-01\",\"meta~id\":\"x\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/release~1date"
+          },
+          "max": {
+            "pointer": "/release~1date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/meta~0id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "capability": "json_date_selection",
+      "expected": {
+        "assertions": [
+          {
+            "equals": "0a04a0a796be2a4a79e425351535e1bff3e62625d3d8887db671fe3ba51acf3a",
+            "pointer": "/evidenceSha256"
+          },
+          {
+            "equals": 1,
+            "pointer": "/rowsEligible"
+          },
+          {
+            "equals": "a",
+            "pointer": "/rows/0/values/id"
+          }
+        ],
+        "status": "pass"
+      },
+      "id": "date-null-where",
+      "operation": "json_date_selection",
+      "payload": {
+        "input": "{\"rows\":[{\"date\":\"2026-01-01\",\"channel\":null,\"id\":\"a\"},{\"date\":\"2026-02-01\",\"channel\":\"stable\",\"id\":\"b\"}]}",
+        "request": {
+          "arrayPointer": "/rows",
+          "filter": {
+            "lte": "2026-12-31",
+            "pointer": "/date"
+          },
+          "max": {
+            "pointer": "/date"
+          },
+          "project": [
+            {
+              "name": "id",
+              "pointer": "/id"
+            }
+          ],
+          "where": [
+            {
+              "equals": null,
+              "pointer": "/channel"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "schemaVersion": "1.0.0",
+  "suiteId": "date-selection-v1"
+}

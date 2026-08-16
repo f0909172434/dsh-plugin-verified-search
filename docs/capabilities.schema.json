@@ -12,6 +12,7 @@
     "runtime_contract",
     "upstream_contract",
     "model_facing_tools",
+    "evaluation_contract",
     "non_goals"
   ],
   "properties": {
@@ -195,6 +196,55 @@
             }
           }
         ]
+      }
+    },
+    "evaluation_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "manifest",
+        "case_count",
+        "network_access_required",
+        "capability_case_counts"
+      ],
+      "properties": {
+        "corpus_id": {
+          "const": "verified-search-offline-v1"
+        },
+        "manifest": {
+          "const": "evaluation/manifest.json"
+        },
+        "case_count": {
+          "const": 42
+        },
+        "network_access_required": {
+          "const": false
+        },
+        "capability_case_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "domain_filter",
+            "json_date_selection",
+            "json_numeric_selection",
+            "json_projection"
+          ],
+          "properties": {
+            "domain_filter": {
+              "const": 11
+            },
+            "json_date_selection": {
+              "const": 10
+            },
+            "json_numeric_selection": {
+              "const": 10
+            },
+            "json_projection": {
+              "const": 11
+            }
+          }
+        }
       }
     },
     "non_goals": {

@@ -58,6 +58,16 @@ jobs:
           retention-days: 30
       - name: Build distributable artifacts
         run: pnpm run build
+      - name: Run frozen offline evaluation
+        run: pnpm run evaluate:offline
+      - name: Upload offline evaluation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: offline-evaluation-${{ github.run_attempt }}
+          path: work/offline-evaluation.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Require committed prebuilt artifacts to reproduce
         run: git diff --exit-code -- lib
       - name: Verify package contents without lifecycle scripts
@@ -100,3 +110,5 @@ jobs:
         run: pnpm test
       - name: Verify build compatibility
         run: pnpm run build
+      - name: Verify offline corpus compatibility
+        run: pnpm run evaluate:offline

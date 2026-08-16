@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/f0909172434/dsh-plugin-verified-search/blob/main/evaluation/manifest.schema.json",
+  "title": "Verified Search Offline Evaluation Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "corpusId",
+    "description",
+    "networkAccessRequired",
+    "caseCount",
+    "suites"
+  ],
+  "properties": {
+    "$schema": { "const": "./manifest.schema.json" },
+    "schemaVersion": { "const": "1.0.0" },
+    "corpusId": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "networkAccessRequired": { "const": false },
+    "caseCount": { "type": "integer", "minimum": 1 },
+    "suites": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["capability", "suiteId", "file", "sha256", "caseCount"],
+        "properties": {
+          "capability": {
+            "enum": [
+              "domain_filter",
+              "json_date_selection",
+              "json_numeric_selection",
+              "json_projection"
+            ]
+          },
+          "suiteId": { "type": "string", "minLength": 1 },
+          "file": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+\\.json$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "caseCount": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

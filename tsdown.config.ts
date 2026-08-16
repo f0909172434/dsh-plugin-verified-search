@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: { index: 'src/index.ts' },
+  entry: {
+    index: 'src/index.ts',
+    'evaluate-offline': 'src/evaluate-offline-cli.ts',
+  },
   format: ['esm'],
   outDir: 'lib',
   outputOptions: { entryFileNames: '[name].js' },

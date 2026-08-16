@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 reports/
+work/
 .honest-ci/evidence.json
 *.tgz
 *.log

@@ -14,6 +14,11 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   artifacts.
 - A 222-test HonestCI baseline derived from completed default-branch run `31931938350`, with
   its source commit, artifact digest, and report hashes recorded in the dogfood contract.
+- Frozen `verified-search-offline-v1` evaluation corpus with 42 hash-bound positive and
+  negative cases for domain filtering, date selection, exact-number selection, and strict
+  projection.
+- Deterministic offline evaluation CLI and machine-readable report with no model, provider,
+  browser, DNS, or network dependency.
 
 ### Changed
 
@@ -21,11 +26,13 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   implied successor release.
 - GitHub Actions are commit-pinned, checkout credentials are not persisted, stale runs are
   cancelled, and package-only checks run once instead of on every compatibility entry.
-- Local JUnit and transient HonestCI evidence outputs are ignored while the reviewed baseline
-  remains committed.
+- Local JUnit, evaluation reports, and transient HonestCI evidence outputs are ignored while
+  reviewed baselines and corpus files remain committed.
 - The HonestCI baseline is active: default-branch run `31932149983` observed 222 tests against
   a 222-test baseline with zero drop, no failures/errors/skips, and no findings across a fully
   successful Ubuntu/Windows compatibility run.
+- `capabilities.json` now binds the offline corpus ID, manifest path, total case count,
+  per-capability counts, and offline execution boundary.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
@@ -45,9 +52,11 @@ release and must be installed by an exact commit when evaluated.
 ### Known limits
 
 - No stable compatibility promise exists for the experimental tools.
-- The current evaluation contains two large official-source tasks, not a broad frozen corpus.
-- Passing repository tests does not constitute a live provider or clean Harness installation
-  result.
+- The offline corpus covers deterministic bounded primitives; only two larger live
+  official-source tasks have been recorded, so broad retrieval-quality claims remain
+  unsupported.
+- Passing repository tests or the offline corpus does not constitute a live provider or clean
+  Harness installation result.
 
 ## 0.1.1 — 2026-08-14
 
