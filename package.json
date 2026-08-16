@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "evaluation",
     "capabilities.json",
     "cordis.patch.yml",
     "LICENSE",
@@ -25,12 +26,15 @@
     "MAINTENANCE.md",
     "docs/assets",
     "docs/COMPATIBILITY.md",
+    "docs/HONEST_CI_DOGFOOD.md",
+    "docs/OFFLINE_EVALUATION.md",
     "docs/capabilities.schema.json"
   ],
   "scripts": {
     "build": "tsdown",
     "check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "evaluate:offline": "node ./lib/evaluate-offline.js --manifest evaluation/manifest.json --out work/offline-evaluation.json"
   },
   "keywords": [
     "deepseek",
