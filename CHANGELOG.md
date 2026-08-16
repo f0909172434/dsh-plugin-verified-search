@@ -23,6 +23,9 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   cancelled, and package-only checks run once instead of on every compatibility entry.
 - Local JUnit and transient HonestCI evidence outputs are ignored while the reviewed baseline
   remains committed.
+- The HonestCI baseline is active: default-branch run `31932149983` observed 222 tests against
+  a 222-test baseline with zero drop, no failures/errors/skips, and no findings across a fully
+  successful Ubuntu/Windows compatibility run.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
