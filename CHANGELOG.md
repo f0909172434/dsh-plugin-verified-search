@@ -44,6 +44,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   decimal-exponent normalization, and comparison without IEEE-754 collapse.
 - Direct tests for lossless lexeme retention, exact comparison, shared strict-JSON failures,
   caller-provided number limits, and pre-materialization depth bounds.
+- A revised 250-test HonestCI baseline derived from completed default-branch run
+  `31941012664` after the lossless-number extraction added four durable behavior tests.
 
 ### Changed
 
