@@ -1,0 +1,16 @@
+version: 1
+reports:
+  - name: unit
+    paths:
+      - reports/junit.xml
+    format: junit
+    min_tests: 1
+    max_drop_percent: 10
+    max_skipped_percent: null
+baseline:
+  file: .honest-ci/baseline.json
+  source: default-branch
+workflows:
+  paths:
+    - .github/workflows/*.yml
+    - .github/workflows/*.yaml
