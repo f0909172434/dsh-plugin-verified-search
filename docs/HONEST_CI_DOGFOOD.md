@@ -143,8 +143,8 @@ and its registered result digest.
 ## Stage 6 — architecture-guard baseline revision
 
 The enforceable source-architecture contract added four graph and size-budget tests plus one
-product-contract binding test. The baseline candidate therefore advances from 237 to 242 only
-after the architecture PR was merged and its own default-branch workflow completed:
+product-contract binding test. The baseline therefore advanced from 237 to 242 only after the
+architecture PR was merged and its own default-branch workflow completed:
 
 | Field | Revised value |
 | --- | --- |
@@ -169,9 +169,40 @@ after the architecture PR was merged and its own default-branch workflow complet
 | Offline artifact digest | `sha256:13070a19b27d53b88e62af01621f647f1e80bc8e0d5e03bbee12b8e41637062c` |
 | Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
 
-As before, the baseline revision PR is evaluated against the 237-test baseline from its base
-commit. The 242-test baseline is considered active only after a later `main` run reports
-`baselineTests: 242`, `dropPercent: 0`, and no findings.
+The baseline revision PR was evaluated against the 237-test baseline from its base commit; it
+could not use the new file to weaken its own comparison.
+
+## Stage 7 — architecture-guard baseline activation
+
+The first default-branch run containing the committed 242-test baseline independently closed
+the revision loop:
+
+| Field | Activated value |
+| --- | --- |
+| Activated commit | `c0a1605edd95acab9258b6812bf9b102f9ad1821` |
+| Workflow run | `31936229233` |
+| Event/ref | `push` / `refs/heads/main` |
+| Quality environment | Ubuntu / Node `22.19.0` |
+| Compatibility environments | Ubuntu / Node 24; Windows / Node 22.19 and 24 |
+| Result status | `passed` |
+| Observed totals | 242 tests, 0 failures, 0 errors, 0 skipped |
+| Trusted baseline | 242 tests |
+| Observed drop | 0% |
+| Findings | none |
+| HonestCI artifact ID | `9260726043` |
+| HonestCI artifact digest | `sha256:2c9663c2f8301e405f305c56c2bc8d9599cff2f7d0804be6411490d11810e671` |
+| JUnit SHA-256 | `34641375d972653cf01692ec7325cfb283b84800f1ca195a19654fc597217358` |
+| Evidence JSON SHA-256 | `3277a980c6959ccb4121fc9e0e2fc8eb930f990c98ef2baababb81feb255a796` |
+| Baseline artifact SHA-256 | `0e31e3803eae139932b9b5c16c53ba071f8f1084793af7c2b6a79f1cbbf63247` |
+| Evidence creation time | `2026-08-16T08:21:21.626Z` |
+| Offline report artifact ID | `9260726718` |
+| Offline artifact digest | `sha256:8e25af1e4658ad4cd942e4d06699c66966568dbc63fa8bf9fe6fca7fa3ff18c3` |
+| Offline report SHA-256 | `52b24daad9d5514f408637f142ef850cb1fbcc715a509222a51f51daed89604f` |
+| Offline result digest | `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0` |
+
+Future pull requests now compare against the active 242-test baseline. The architecture tests
+remain ordinary tests rather than a separate green badge, so removing or bypassing them must
+also reduce the observed count or change the source-architecture contract.
 
 ## Why only the primary job is wrapped
 
