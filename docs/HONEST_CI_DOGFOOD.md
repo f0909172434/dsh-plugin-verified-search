@@ -12,10 +12,11 @@ The primary Ubuntu / Node 22.19 job is wrapped by HonestCI `v1.0.4`, pinned to c
 4ee4e30b283c219ff42e75606e692f34c91ba826
 ```
 
-It executes:
+It executes Vitest directly through pnpm so reporter flags cannot be swallowed by a script
+argument delimiter:
 
 ```bash
-pnpm test -- \
+pnpm exec vitest run \
   --reporter=default \
   --reporter=junit \
   --outputFile.junit=reports/junit.xml
@@ -63,8 +64,20 @@ the observed counts and no configured threshold violation. It does not establish
 assertion is meaningful, that the suite covers all security properties, or that an external
 maintainer adopted either project.
 
-## Incident log policy
+## Incident log
 
-Only real findings are recorded. When HonestCI blocks or warns on a repository change, add an
-entry containing the date, finding code, root cause, resolution, and whether the product or
-this integration required a change. Do not create synthetic success stories.
+### 2026-08-16 — `HCI001_MISSING_REPORT`
+
+- **Run:** pull-request workflow `31931757500`, first HonestCI integration attempt.
+- **Observed:** Vitest completed 222 tests successfully, but no `reports/junit.xml` existed;
+  HonestCI blocked the primary job and retained a failed evidence bundle.
+- **Root cause:** `pnpm test -- --reporter=...` expanded to
+  `vitest run -- --reporter=...`. The literal `--` terminated Vitest option parsing, so the
+  JUnit reporter flags were treated as positional arguments and ignored.
+- **Resolution:** invoke `pnpm exec vitest run` with reporter flags directly.
+- **Product impact:** no verified-search source defect was found. The integration command was
+  defective, and HonestCI correctly prevented a false evidence claim.
+
+Only real findings are recorded. Future entries must include the date, finding code, root
+cause, resolution, and whether the product or this integration required a change. Do not
+create synthetic success stories.
