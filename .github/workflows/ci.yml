@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,7 +23,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: true
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
@@ -58,14 +59,19 @@ jobs:
           retention-days: 30
       - name: Build distributable artifacts
         run: pnpm run build
-      - name: Upload rebuilt lib for the refactor branch
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: rebuilt-lib-${{ github.run_attempt }}
-          path: lib
-          if-no-files-found: warn
-          retention-days: 1
+      - name: Refresh committed prebuilt artifacts on the PR branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if git diff --quiet -- lib; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- lib
+          git commit -m "build: refresh distributable artifacts"
+          git push origin "HEAD:${HEAD_REF}"
       - name: Run frozen offline evaluation
         run: pnpm run evaluate:offline
       - name: Upload offline evaluation report
