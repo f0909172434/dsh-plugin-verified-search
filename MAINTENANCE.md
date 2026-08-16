@@ -87,6 +87,32 @@ Every feature pull request must state:
 A new model-facing tool, network exception, source-specific parser, provider, or lifecycle
 hook requires a separate architectural decision rather than an incidental addition.
 
+## Serial architecture workflow
+
+Architecture debt is removed as a serial, recoverable queue rather than a set of parallel
+branches:
+
+- at most one architecture refactor pull request may be active at a time;
+- each architecture branch starts from the latest merged `main` commit whose normal CI matrix
+  has completed successfully;
+- a pull request must not wait for, approve, or merge itself through a GitHub API workflow;
+- write-enabled branch-only finalizers, committed extraction scripts, staging payloads, and
+  other one-off refactor machinery are not part of the accepted production diff;
+- extraction work modifies production TypeScript, focused tests, architecture metadata,
+  documentation, and reproducible generated artifacts directly;
+- the next branch is not created until the previous pull request has been squash-merged and
+  the resulting `main` CI run is green.
+
+[`docs/ROADMAP.md`](docs/ROADMAP.md) records the only active architecture task, queued ownership
+boundaries, acceptance conditions, and the current release target. It is a recovery aid, not
+a substitute for the machine-readable contracts in `architecture.json` and
+`capabilities.json`.
+
+The HonestCI baseline is updated at a durable milestone rather than after each small test
+increase. A baseline update is appropriate when an architecture phase completes, at a formal
+beta/release checkpoint, or when the durable test count has increased by roughly ten percent
+or more. A baseline must never be lowered to make a change pass.
+
 ## Single-maintainer evidence rule
 
 External reviewers, contributors, users, stars, and adoption are optional signals rather than
