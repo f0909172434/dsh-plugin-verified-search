@@ -2,6 +2,7 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import {
   evaluateOfflineCorpus,
   OfflineEvaluationContractError,
@@ -105,6 +106,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const entryPath = process.argv[1]
+if (entryPath !== undefined && import.meta.url === pathToFileURL(resolve(entryPath)).href) {
   process.exitCode = await main()
 }
