@@ -29,26 +29,38 @@ The gate requires:
 - at least one test;
 - zero reported failures and errors;
 - no skipped-ratio limit, because the current suite does not define one;
-- no more than a 10% drop after a trusted baseline exists.
+- no more than a 10% drop from the trusted baseline.
 
-The first merged default-branch run intentionally has no committed baseline. HonestCI must
-report `HCI101_BASELINE_MISSING` as a warning rather than inventing a comparison. The run
-uploads both the evidence bundle and JUnit report for 30 days.
+The rollout initially had no baseline. HonestCI reported `HCI101_BASELINE_MISSING` as a
+warning while continuing to enforce freshness, nonzero test count, and failure/error checks.
 
 ## Stage 2 — baseline freeze
 
-A baseline is committed only after a successful `main` run has produced observable evidence.
-The baseline pull request must record:
+The committed `.honest-ci/baseline.json` candidate is derived only from a completed
+post-merge `main` run:
 
-- the source `main` commit;
-- the workflow run ID;
-- the exact HonestCI commit;
-- the observed report name and test count;
-- the JUnit and evidence-bundle artifact identity;
-- why the configured drop threshold is appropriate.
+| Field | Bound value |
+| --- | --- |
+| Source commit | `d329bc2e3e046d7711aa08e3f8983b56fdd3c809` |
+| Workflow run | `31931938350` |
+| Event/ref | `push` / `refs/heads/main` |
+| HonestCI | `1.0.4` at `4ee4e30b283c219ff42e75606e692f34c91ba826` |
+| Report | `unit` / `reports/junit.xml` |
+| Observed totals | 222 tests, 0 failures, 0 errors, 0 skipped |
+| GitHub artifact ID | `9259548102` |
+| GitHub artifact digest | `sha256:0a62cf06316fe67bb73f64840ed0e72bd2801539e27fead17f8d23973aab76de` |
+| JUnit SHA-256 | `a3e8107caabf3b9b690b8595e74372931f91f09b12dd4cb833405aec946b3ecc` |
+| Evidence JSON SHA-256 | `8e982e7b80fa3b2a9d0d9aad8810509f38eeb1d930c787944853dc170cc9e2b2` |
+| Evidence creation time | `2026-08-16T06:39:50.594Z` |
 
-A pull request may not derive a lower baseline from its own modified test suite. HonestCI reads
-the baseline from the pull-request base commit through the GitHub API.
+The baseline records 222 tests. The initial `max_drop_percent: 10` tolerance is intentionally
+coarse enough to permit small reviewed test reorganizations while blocking a loss of roughly
+one tenth of the suite. Any intentional reduction must update the baseline in a separate PR
+whose rationale identifies removed behavior and the source default-branch evidence.
+
+The baseline PR itself cannot lower its own trusted comparison: on pull requests, HonestCI
+reads the baseline from the base commit through the GitHub API. Activation is confirmed only
+when the subsequent `main` run reports `baselineTests: 222` and `dropPercent: 0`.
 
 ## Why only the primary job is wrapped
 
