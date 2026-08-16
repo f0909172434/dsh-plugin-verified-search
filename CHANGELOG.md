@@ -12,6 +12,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   conformance.
 - HonestCI `v1.0.4` dogfood gate on the primary test job, with retained JUnit and evidence
   artifacts.
+- A 222-test HonestCI baseline derived from completed default-branch run `31931938350`, with
+  its source commit, artifact digest, and report hashes recorded in the dogfood contract.
 
 ### Changed
 
@@ -19,12 +21,8 @@ This project separates reviewed releases from unreleased experiments. Dates use 
   implied successor release.
 - GitHub Actions are commit-pinned, checkout credentials are not persisted, stale runs are
   cancelled, and package-only checks run once instead of on every compatibility entry.
-
-### Pending
-
-- The HonestCI test-count baseline remains intentionally absent until a successful `main` run
-  produces observable default-branch evidence. Baseline absence is a warning, not a fabricated
-  comparison.
+- Local JUnit and transient HonestCI evidence outputs are ignored while the reviewed baseline
+  remains committed.
 
 ## 0.3.0-experiment.0 — unreleased experiment
 
