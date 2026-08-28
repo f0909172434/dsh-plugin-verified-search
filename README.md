@@ -26,10 +26,11 @@ It verifies workflow and structured-source postconditions. It does **not** certi
 
 ## Prerequisites
 
-- DeepSeek Harness `0.1.0-rc.6` and Cordis `4.0.1`.
+- DeepSeek Harness `0.1.1-rc.2` and Cordis `4.0.1`. The official `0.1.2-alpha.1` tree was reviewed at source level with no breaking change to any consumed surface; the exact peer contract advances to it once it is published to npm.
 - Node.js `22.19.x` or `24.x`.
 - A `DEEPSEEK_API_KEY` available through the Harness credential service or launch environment.
 - A search-capable preset. The plugin does not grant search capability to the shipped `minimal` preset.
+- Coexists with the `dsh-web` ecosystem bundle (`@linxin666/dsh-web-all`) and `dsh-deepseek-girl-pet` in one `web` profile: the combined five-layer patch composition was verified with the official `@deepseek-ai/cordis-plugin-include` (169 entries, no duplicate ids, no missing rows, no warnings), no ecosystem package registers `web_search` or mounts `time-context`, and no HTTP routes collide.
 - Ubuntu and Windows are covered by CI. macOS is not currently part of the support contract.
 
 See [the compatibility contract](docs/COMPATIBILITY.md) before changing Harness, Cordis, Node, or package-manager versions.
