@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/readme-hero.svg" alt="Verified Search project header" width="100%" />
+</p>
+
 # dsh-plugin-verified-search
 
 [![CI](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml)
