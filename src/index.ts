@@ -96,7 +96,11 @@ export type {
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    /** A blank live agent switched to a different standing preset. */
+    /**
+     * Declared natively by `@deepseek-ai/dsh-agent-presets` since rc.7 with the
+     * same signature; keep this augmentation byte-identical or import the
+     * upstream declaration instead, so interface merging never diverges.
+     */
     'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void
   }
 }

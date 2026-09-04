@@ -38,7 +38,7 @@ permanent provider guarantee.
 | --- | --- | --- |
 | Package version | `0.1.1` | `0.3.0-experiment.0` |
 | Model-facing tools | `verified_search` | five tools listed in `capabilities.json` |
-| DeepSeek Harness packages | `0.1.0-rc.6` | exact peer contract `0.1.0-rc.6` |
+| DeepSeek Harness packages | `0.1.0-rc.6` | exact peer contract `0.1.1-rc.2` |
 | Cordis | `4.0.1` | `4.0.1` |
 | Node | `22.19.x`, `24.x` | `22.19.x`, `24.x` |
 | CI operating systems | Ubuntu, Windows | Ubuntu, Windows |

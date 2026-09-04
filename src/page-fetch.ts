@@ -3,7 +3,7 @@ import { request as httpsRequest } from 'node:https'
 import { BlockList, isIP } from 'node:net'
 import type { LookupFunction } from 'node:net'
 import { sourceMatchesDomain } from './domains.js'
-import { sanitizeSourceUrl } from './provider.js'
+import { sanitizeSourceUrl, USER_AGENT } from './provider.js'
 
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_REDIRECTS = 3
@@ -228,13 +228,13 @@ function requestHeaders(url: URL): Readonly<Record<string, string>> {
       'accept-language': 'eng',
       'accept-max-cs-size': String(DEFAULT_MAX_BYTES),
       'accept-encoding': 'identity',
-      'user-agent': 'dsh-plugin-verified-search/0.3.0-experiment.0',
+      'user-agent': USER_AGENT,
     }
   }
   return {
     accept: 'text/html, application/xhtml+xml;q=0.95, application/json;q=0.9, text/plain;q=0.85, text/markdown;q=0.8',
     'accept-encoding': 'identity',
-    'user-agent': 'dsh-plugin-verified-search/0.3.0-experiment.0',
+    'user-agent': USER_AGENT,
   }
 }
 

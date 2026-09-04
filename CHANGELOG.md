@@ -49,6 +49,23 @@ This project separates reviewed releases from unreleased experiments. Dates use 
 
 ### Changed
 
+- The exact peer contract was advanced from DeepSeek Harness `0.1.0-rc.6` to the latest
+  npm-published `0.1.1-rc.2` after a source-level review of the official `0.1.2-alpha.1`
+  tree confirmed no breaking change to the plugin's consumed API surface; `capabilities.json`,
+  the contract test, and the compatibility matrix were advanced together.
+- Web-profile coexistence was verified by composing the official `dsh-base` + `dsh-web-app`
+  bundle patches together with `@linxin666/dsh-web-all` (the dsh-web ecosystem bundle), this
+  plugin's layer, and `dsh-deepseek-girl-pet`'s layer through
+  `@deepseek-ai/cordis-plugin-include` 1.0.6 (the version the harness vendors): 169 entries
+  compose with no duplicate ids, no missing rows, and no patch warnings. The plugin inserts
+  its two rows after the web surface without touching it, shares no row ids with the
+  ecosystem bundle, and no ecosystem package registers the `web_search` name, mounts
+  `time-context`, or collides with its HTTP routes.
+- The outbound `user-agent` attribution string is defined once in the provider engine and
+  reused by the evidence fetcher instead of being duplicated as a literal.
+- The `agent-preset/selected` event augmentation documents its relationship to the now-native
+  `@deepseek-ai/dsh-agent-presets` declaration it must remain identical to.
+
 - Repository documentation now treats `main` as an unreleased experiment rather than an
   implied successor release.
 - GitHub Actions are commit-pinned, checkout credentials are not persisted, stale runs are

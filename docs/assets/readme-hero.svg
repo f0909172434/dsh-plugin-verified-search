@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+      <title id="title">Verified Search</title><desc id="desc">Bounded current-source retrieval with visible evidence gaps.</desc>
+      <rect width="1200" height="360" fill="#e8f0f3"/><path d="M0 306h1200M676 0v360" stroke="#112229" stroke-opacity=".28"/>
+      <g font-family="Arial, Helvetica, sans-serif"><text x="54" y="61" fill="#1a9bb5" font-size="15" font-weight="700" letter-spacing="3">VS / 05 / PUBLIC WORK</text>
+      <text x="54" y="166" fill="#112229" font-size="62" font-weight="750" letter-spacing="-3">Verified Search</text>
+      <text x="54" y="216" fill="#112229" fill-opacity=".68" font-size="19">Bounded current-source retrieval with visible evidence gaps.</text>
+      <text x="54" y="329" fill="#112229" fill-opacity=".62" font-size="13" letter-spacing="2">CLAIM  /  EVIDENCE  /  BOUNDARY</text></g>
+      <g fill="none" stroke="#112229" stroke-width="3"><rect x="742" y="68" width="130" height="94"/><rect x="742" y="200" width="130" height="94"/><path d="M872 115h78l72 65-72 67h-78"/><rect x="1022" y="132" width="112" height="96" stroke="#1a9bb5" stroke-width="6"/><path d="M1050 164h56M1050 190h42" stroke="#1a9bb5"/></g>
+    </svg>

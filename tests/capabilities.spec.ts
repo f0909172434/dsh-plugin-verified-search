@@ -119,7 +119,7 @@ describe('machine-readable product contract', () => {
     ])
     expect(capabilities.upstream_contract).toEqual({
       cordis: packageJson.peerDependencies['@deepseek-ai/cordis'],
-      deepseek_harness: '0.1.0-rc.6',
+      deepseek_harness: '0.1.1-rc.2',
       compatibility_kind: 'exact_peer_contract',
     })
     expect(Object.entries(packageJson.peerDependencies)
