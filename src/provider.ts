@@ -62,6 +62,8 @@ const MAX_TITLE_LENGTH = 1000
 const MAX_SNIPPET_LENGTH = 8000
 const MAX_PAGE_AGE_LENGTH = 200
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+/** Attribution header sent on every outbound request. Bump with the package version. */
+export const USER_AGENT = 'dsh-plugin-verified-search/0.3.0-experiment.0'
 const WEB_SEARCH_ERROR_CODES = new Set([
   'invalid_tool_input',
   'unavailable',
@@ -351,7 +353,7 @@ export async function search(
         'anthropic-version': options.apiVersion,
         'content-type': 'application/json',
         'accept': 'application/json',
-          'user-agent': 'dsh-plugin-verified-search/0.3.0-experiment.0',
+        'user-agent': USER_AGENT,
       },
       body: JSON.stringify(body),
       ...(signal === undefined ? {} : { signal }),

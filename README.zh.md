@@ -30,10 +30,11 @@
 
 ## 前置需求
 
-- DeepSeek Harness `0.1.0-rc.6` 與 Cordis `4.0.1`。
+- DeepSeek Harness `0.1.1-rc.2` 與 Cordis `4.0.1`。官方 `0.1.2-alpha.1` 已做源碼層級審查，此外掛消費的 API 面皆無破壞變更；待其發布到 npm 後，exact peer contract 會隨之推進。
 - Node.js `22.19.x` 或 `24.x`。
 - 透過 Harness credential service 或啟動環境提供 `DEEPSEEK_API_KEY`。
 - 使用原本就有搜尋能力的 preset；此外掛不會替內建 `minimal` preset 擴權。
+- 可與 `dsh-web` 生態全家桶（`@linxin666/dsh-web-all`）及 `dsh-deepseek-girl-pet` 共存在同一個 `web` profile：已用官方 `@deepseek-ai/cordis-plugin-include` 驗證五層 patch 疊加（169 個 entries，零重複 id、零缺漏、零警告），生態套件沒有註冊 `web_search`、沒有掛 `time-context`，HTTP 路由也無碰撞。
 - CI 涵蓋 Ubuntu 與 Windows；macOS 目前不屬於正式支援契約。
 
 更換 Harness、Cordis、Node 或 package-manager 版本前，請先閱讀[相容性契約](docs/COMPATIBILITY.md)。
