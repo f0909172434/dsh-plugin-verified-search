@@ -29,13 +29,17 @@ write-enabled self-merging workflows rather than final production changes.
 
 | Pull requests | Disposition | Preserved result |
 | --- | --- | --- |
-| #20, #21, #31, #32 | Close as superseded by the 250-test baseline on `main` | milestone-based HonestCI policy in `MAINTENANCE.md` |
-| #22 | Close as superseded by the merged shared lossless-number engine | numeric selector ownership already present on `main` |
-| #23–#30 | Close without merging operational scaffolding | ownership boundaries and acceptance conditions below |
+| #20, #21, #31, #32 | Closed as superseded by the 250-test baseline on `main` | milestone-based HonestCI policy in `MAINTENANCE.md` |
+| #22 | Closed as superseded by the merged shared lossless-number engine | numeric selector ownership already present on `main` |
+| #23–#30 | Closed without merging operational scaffolding | ownership boundaries and acceptance conditions below |
 
-Closed branches are reset to the verified `main` baseline when deletion is not available
-through the maintenance interface. No extractor, finalizer, staging payload, or self-merging
-workflow is promoted to `main`.
+All thirteen obsolete branches were reset to the verified baseline because ref deletion was
+not available through the maintenance interface. No extractor, finalizer, staging payload, or
+self-merging workflow was promoted to `main`.
+
+The cleanup and serial maintenance contract were squash-merged in PR #33 as commit
+`c29b531a6c2e52200d454aa9ded42214ba8c0014`. The resulting `main` CI run `31949245475`
+completed successfully before the first production branch was created.
 
 ## Work-in-progress rule
 
@@ -52,9 +56,9 @@ workflow is promoted to `main`.
 
 | Order | Ownership boundary | Status | Completion condition |
 | ---: | --- | --- | --- |
-| 0 | PR queue and maintenance contract | **active** | no stale/duplicate open PR; no write-enabled one-off refactor workflow; roadmap and maintenance rules merged; `main` CI green |
-| 1 | strict parsing adapter for `json-projection.ts` | **next** | projection delegates bounded decoding, Unicode, duplicate-key, depth, and strict materialization to `json-primitives.ts`; projection errors and behavior remain compatible; `json-projection.ts` is about 25,000 bytes or less |
-| 2 | repair-aware JSON projection core | queued | repair traversal, repair selection/audits, nested source-order projection, and construction budgeting have one coherent engine owner; all new/existing modules are at most 20,000 bytes; projection exception removed; exception count 5 → 4 |
+| 0 | PR queue and maintenance contract | completed in #33 | no stale/duplicate open PR; no write-enabled one-off refactor workflow; roadmap and maintenance rules merged; `main` CI green |
+| 1 | strict parsing adapter for `json-projection.ts` | completed in #34 | projection delegates bounded decoding, Unicode, duplicate-key, depth, and strict materialization to `json-primitives.ts`; projection errors and behavior remain compatible; the file shrinks substantially without forcing the resolution-core extraction |
+| 2 | repair-aware JSON projection core | **next** | repair traversal, repair selection/audits, nested source-order projection, and construction budgeting have one coherent engine owner; all new/existing modules are at most 20,000 bytes; projection exception removed; exception count 5 → 4 |
 | 3 | research request normalization | queued | `research-request.ts` owns schema-facing validation and claim/lane/domain/date normalization without provider, network, execution, aggregation, presentation, or Harness lifecycle work |
 | 4 | research lane execution | queued | `research-lane.ts` owns bounded provider/search/fetch execution, lane-local limits, timeout, abort, materialization, and cleanup without cross-lane aggregation or final presentation |
 | 5 | research aggregation and presentation | queued | coherent aggregation/presentation owners reduce every research module to at most 20,000 bytes and remove the `research.ts` exception without changing schemas, concurrency, limits, errors, or output format |
@@ -65,12 +69,10 @@ workflow is promoted to `main`.
 | 10 | offline evaluation manifest and integrity | queued | manifest/suite parsing, immutable case loading, path safety, hashes, and corpus integrity are isolated; CLI/report schema, 42 cases, expected outputs, and registered digest remain unchanged |
 | 11 | release hardening | queued | zero architecture exceptions unless an evidence-backed ADR remains; clean cross-platform install/build/package; reproducible `lib/`; fixed corpus and properties green; representative live conformance; beta artifact, checksums, rollback, and limitations documented |
 
-## Active architecture task after queue cleanup
+## Completed projection parser migration
 
-The only next production task is **strict parsing adapter for `json-projection.ts`**.
-
-Move these responsibilities to the existing shared primitives through a caller-owned failure
-adapter:
+PR #34 moves these responsibilities to the existing shared primitives through a
+projection-owned failure adapter:
 
 - bounded UTF-8 input decoding;
 - unpaired Unicode surrogate detection;
@@ -78,7 +80,12 @@ adapter:
 - maximum JSON depth enforcement;
 - strict JSON validation and materialization.
 
-Retain in the projection engine for this first production PR:
+The direct migration removes 171 lines of duplicate scanner/decoder implementation and reduces
+`json-projection.ts` from 31,362 to 26,624 bytes. The first PR deliberately keeps the existing
+size exception instead of mixing in the separately reviewable repair-aware core merely to hit
+a byte target.
+
+The projection engine retains:
 
 - repair-aware pointer semantics and audit records;
 - pointer-not-found versus type-mismatch errors;
@@ -87,8 +94,22 @@ Retain in the projection engine for this first production PR:
 - scalar and aggregate construction budgets;
 - request/result schemas, package exports, and every `JSON_PROJECTION_*` error code.
 
-This first production PR does not remove the size exception by force. It prepares a separately
-reviewable second extraction and must not introduce a wrapper with no ownership.
+## Next architecture task
+
+The only next production task is **repair-aware JSON projection core**. Create one coherent
+engine owner, such as `src/json-projection-resolution.ts`, for:
+
+- repair-aware pointer traversal;
+- compatible repair candidate resolution;
+- repair audit construction;
+- nested source-order projection;
+- projection construction budgeting.
+
+Completion requires `json-projection.ts` and the extracted core to be at most 20,000 bytes,
+with no import cycle and no change to public schemas, errors, source order, repair audits,
+scalar/aggregate budgets, package exports, the 42-case corpus, or the registered digest. The
+`json-projection.ts` architecture exception is then removed and the exception count becomes
+four.
 
 ## Validation for every production PR
 

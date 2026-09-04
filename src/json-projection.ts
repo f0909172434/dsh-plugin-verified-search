@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto'
 import {
+  decodeJsonInput as decodeSharedJsonInput,
+  parseStrictJson as parseSharedStrictJson,
+  type JsonPrimitiveFailureKind,
+} from './json-primitives.js'
+import {
   JSON_SELECTION_MAX_INPUT_BYTES,
   JSON_SELECTION_MAX_PROJECTED_SCALAR_BYTES,
   JSON_SELECTION_MAX_ROWS,
@@ -181,6 +186,26 @@ function fail(message: string, code: JsonProjectionErrorCode, options?: ErrorOpt
   throw new JsonProjectionError(message, code, options)
 }
 
+const JSON_PRIMITIVE_FAILURE_CODES: Readonly<Record<JsonPrimitiveFailureKind, JsonProjectionErrorCode>> = {
+  invalid_request: 'JSON_PROJECTION_INVALID_REQUEST',
+  input_too_large: 'JSON_PROJECTION_INPUT_TOO_LARGE',
+  invalid_utf8: 'JSON_PROJECTION_INVALID_UTF8',
+  invalid_unicode: 'JSON_PROJECTION_INVALID_UNICODE',
+  invalid_json: 'JSON_PROJECTION_INVALID_JSON',
+  duplicate_key: 'JSON_PROJECTION_DUPLICATE_KEY',
+  parse_limit_exceeded: 'JSON_PROJECTION_PARSE_LIMIT_EXCEEDED',
+  invalid_pointer: 'JSON_PROJECTION_INVALID_POINTER',
+  invalid_iso_date: 'JSON_PROJECTION_INVALID_REQUEST',
+}
+
+function failJsonPrimitive(
+  kind: JsonPrimitiveFailureKind,
+  message: string,
+  options?: ErrorOptions,
+): never {
+  return fail(message, JSON_PRIMITIVE_FAILURE_CODES[kind], options)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -320,181 +345,16 @@ function compileRequest(input: JsonProjectionRequest): CompiledRequest {
   }
 }
 
-function hasUnpairedSurrogate(value: string): boolean {
-  for (let index = 0; index < value.length; index++) {
-    const code = value.charCodeAt(index)
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return true
-      index++
-    } else if (code >= 0xdc00 && code <= 0xdfff) {
-      return true
-    }
-  }
-  return false
-}
-
-/** Valid-JSON scanner that adds duplicate-key, Unicode, and depth checks. */
-class StrictJsonScanner {
-  private cursor = 0
-
-  constructor(private readonly input: string) {}
-
-  scan(): void {
-    this.skipWhitespace()
-    this.scanValue(0)
-    this.skipWhitespace()
-    if (this.cursor !== this.input.length) fail('JSON has trailing content', 'JSON_PROJECTION_INVALID_JSON')
-  }
-
-  private scanValue(depth: number): void {
-    if (depth > MAX_JSON_DEPTH) {
-      fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_PROJECTION_PARSE_LIMIT_EXCEEDED')
-    }
-    const character = this.input[this.cursor]
-    if (depth === MAX_JSON_DEPTH && (character === '{' || character === '[')) {
-      fail(`JSON nesting exceeds ${MAX_JSON_DEPTH}`, 'JSON_PROJECTION_PARSE_LIMIT_EXCEEDED')
-    }
-    if (character === '{') {
-      this.scanObject(depth + 1)
-    } else if (character === '[') {
-      this.scanArray(depth + 1)
-    } else if (character === '"') {
-      this.scanString()
-    } else {
-      this.scanPrimitive()
-    }
-  }
-
-  private scanObject(depth: number): void {
-    this.cursor++
-    this.skipWhitespace()
-    if (this.input[this.cursor] === '}') {
-      this.cursor++
-      return
-    }
-    const keys = new Set<string>()
-    while (this.cursor < this.input.length) {
-      if (this.input[this.cursor] !== '"') fail('invalid JSON object key', 'JSON_PROJECTION_INVALID_JSON')
-      const key = this.scanString()
-      if (keys.has(key)) fail('JSON object contains a duplicate key', 'JSON_PROJECTION_DUPLICATE_KEY')
-      keys.add(key)
-      this.skipWhitespace()
-      if (this.input[this.cursor] !== ':') fail('invalid JSON object separator', 'JSON_PROJECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-      this.scanValue(depth)
-      this.skipWhitespace()
-      const separator = this.input[this.cursor]
-      if (separator === '}') {
-        this.cursor++
-        return
-      }
-      if (separator !== ',') fail('invalid JSON object separator', 'JSON_PROJECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-    }
-    fail('unterminated JSON object', 'JSON_PROJECTION_INVALID_JSON')
-  }
-
-  private scanArray(depth: number): void {
-    this.cursor++
-    this.skipWhitespace()
-    if (this.input[this.cursor] === ']') {
-      this.cursor++
-      return
-    }
-    while (this.cursor < this.input.length) {
-      this.scanValue(depth)
-      this.skipWhitespace()
-      const separator = this.input[this.cursor]
-      if (separator === ']') {
-        this.cursor++
-        return
-      }
-      if (separator !== ',') fail('invalid JSON array separator', 'JSON_PROJECTION_INVALID_JSON')
-      this.cursor++
-      this.skipWhitespace()
-    }
-    fail('unterminated JSON array', 'JSON_PROJECTION_INVALID_JSON')
-  }
-
-  private scanString(): string {
-    const start = this.cursor
-    this.cursor++
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]
-      if (character === '"') {
-        this.cursor++
-        let decoded: unknown
-        try {
-          decoded = JSON.parse(this.input.slice(start, this.cursor))
-        } catch (error: unknown) {
-          fail('invalid JSON string', 'JSON_PROJECTION_INVALID_JSON', { cause: error })
-        }
-        if (typeof decoded !== 'string') fail('invalid JSON string', 'JSON_PROJECTION_INVALID_JSON')
-        if (hasUnpairedSurrogate(decoded)) {
-          fail('JSON strings must not contain unpaired UTF-16 surrogates', 'JSON_PROJECTION_INVALID_UNICODE')
-        }
-        return decoded
-      }
-      if (character === '\\') {
-        this.cursor += this.input[this.cursor + 1] === 'u' ? 6 : 2
-      } else {
-        this.cursor++
-      }
-    }
-    fail('unterminated JSON string', 'JSON_PROJECTION_INVALID_JSON')
-  }
-
-  private scanPrimitive(): void {
-    const start = this.cursor
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]!
-      if (character === ',' || character === ']' || character === '}' || /\s/u.test(character)) break
-      this.cursor++
-    }
-    if (this.cursor === start) fail('invalid JSON value', 'JSON_PROJECTION_INVALID_JSON')
-  }
-
-  private skipWhitespace(): void {
-    while (this.cursor < this.input.length) {
-      const character = this.input[this.cursor]
-      if (character !== ' ' && character !== '\t' && character !== '\r' && character !== '\n') break
-      this.cursor++
-    }
-  }
-}
-
 function decodeInput(input: string | Uint8Array): { readonly text: string; readonly bytes: Uint8Array } {
-  if (typeof input === 'string') {
-    if (hasUnpairedSurrogate(input)) {
-      fail('JSON input must not contain unpaired UTF-16 surrogates', 'JSON_PROJECTION_INVALID_UNICODE')
-    }
-    const bytes = Buffer.from(input, 'utf8')
-    if (bytes.byteLength > JSON_SELECTION_MAX_INPUT_BYTES) {
-      fail('JSON input exceeds the 8 MiB limit', 'JSON_PROJECTION_INPUT_TOO_LARGE')
-    }
-    return { text: input, bytes }
-  }
-  if (!(input instanceof Uint8Array)) fail('JSON input must be a string or Uint8Array', 'JSON_PROJECTION_INVALID_REQUEST')
-  if (input.byteLength > JSON_SELECTION_MAX_INPUT_BYTES) {
-    fail('JSON input exceeds the 8 MiB limit', 'JSON_PROJECTION_INPUT_TOO_LARGE')
-  }
-  try {
-    return { text: new TextDecoder('utf-8', { fatal: true }).decode(input), bytes: input }
-  } catch (error: unknown) {
-    fail('JSON input is not valid UTF-8', 'JSON_PROJECTION_INVALID_UTF8', { cause: error })
-  }
+  return decodeSharedJsonInput(input, {
+    maxBytes: JSON_SELECTION_MAX_INPUT_BYTES,
+    maxBytesLabel: '8 MiB',
+    fail: failJsonPrimitive,
+  })
 }
 
 function parseStrictJson(text: string): unknown {
-  new StrictJsonScanner(text).scan()
-  try {
-    return JSON.parse(text) as unknown
-  } catch (error: unknown) {
-    fail('JSON input is invalid', 'JSON_PROJECTION_INVALID_JSON', { cause: error })
-  }
+  return parseSharedStrictJson(text, { maxDepth: MAX_JSON_DEPTH, fail: failJsonPrimitive })
 }
 
 function asciiCaseFold(value: string): string | undefined {
