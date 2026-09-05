@@ -27,8 +27,10 @@ The currently tested development contract is:
 - Node.js `22.19.x` and `24.x`;
 - pnpm `10.28.2` with the committed lockfile;
 - Ubuntu and Windows GitHub-hosted runners;
-- DeepSeek Harness packages at `0.1.0-rc.6`;
+- DeepSeek Harness packages at `0.1.1-rc.2`;
 - `@deepseek-ai/cordis` at `4.0.1`.
+
+Upstream `0.1.2-alpha.1` has been source-reviewed only; the npm peer pins have not been advanced. The reviewed `v0.1.1` tag retains its own historical dependency contract.
 
 Exact peer versions are deliberate. A newer Harness release is unsupported until lifecycle,
 tool registration, session persistence, prompt assembly, turn cleanup, and disposal behavior
