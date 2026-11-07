@@ -10,11 +10,11 @@
 
 [English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
-**Auditable current-source retrieval for DeepSeek Harness.**
+**A DeepSeek Harness plugin that looks up current sources and shows which evidence it kept and which questions it could not answer.**
 
-The plugin replaces an agent's inherited `web_search` with bounded workflows that make source scope, retained evidence, deterministic JSON selection, and unresolved gaps visible. It is the installable companion to [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332) and also mounts the time context discussed in [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344).
+The plugin replaces the `web_search` tool an agent inherits with bounded workflows. Each workflow makes visible which sources were in scope, which evidence was kept, how JSON values were selected, and which gaps remain. It is the installable companion to [deepseek-harness Discussion #332](https://github.com/deepseek-ai/deepseek-harness/discussions/332), and it also mounts the time context discussed in [Discussion #344](https://github.com/deepseek-ai/deepseek-harness/discussions/344).
 
-It verifies workflow and structured-source postconditions. It does **not** certify publisher truth or guarantee that an upstream search index is current.
+The plugin checks that the workflow and the structured sources meet stated conditions. It does **not** certify that a publisher is telling the truth, and it cannot guarantee that an upstream search index is current.
 
 ![Architecture of the bounded evidence workflow](docs/assets/architecture.svg)
 
@@ -26,18 +26,18 @@ It verifies workflow and structured-source postconditions. It does **not** certi
 | Experimental snapshot | `c29b531a6c2e52200d454aa9ded42214ba8c0014` | All five tools listed below | Last green `main` snapshot on 2026-08-16; 250 tests and the 42-case frozen offline corpus passed |
 | Moving `main` | `main` | Unreleased development | Do not install unpinned; behavior and generated artifacts may change between commits |
 
-> **External independent validation: absent.** The repository provides internal deterministic tests, CI, package-reproducibility checks, and maintainer-run conformance evidence. Those signals are not described as third-party review.
+> **No external party has independently validated this plugin.** The evidence in this repository comes from internal deterministic tests, CI, package-reproducibility checks, and conformance runs by the maintainer. None of it is presented as third-party review.
 
 ## Prerequisites
 
-- DeepSeek Harness `0.1.1-rc.2` and Cordis `4.0.1`. The official `0.1.2-alpha.1` tree was reviewed at source level with no breaking change to any consumed surface; the exact peer contract advances to it once it is published to npm.
-- Node.js `22.19.x` or `24.x`.
-- A `DEEPSEEK_API_KEY` available through the Harness credential service or launch environment.
-- A search-capable preset. The plugin does not grant search capability to the shipped `minimal` preset.
-- Coexists with the `dsh-web` ecosystem bundle (`@linxin666/dsh-web-all`) and `dsh-deepseek-girl-pet` in one `web` profile: the combined five-layer patch composition was verified with the official `@deepseek-ai/cordis-plugin-include` (169 entries, no duplicate ids, no missing rows, no warnings), no ecosystem package registers `web_search` or mounts `time-context`, and no HTTP routes collide.
-- Ubuntu and Windows are covered by CI. macOS is not currently part of the support contract.
+- You need DeepSeek Harness `0.1.1-rc.2` and Cordis `4.0.1`. The official `0.1.2-alpha.1` tree was reviewed at the source level and showed no breaking change to any surface this plugin uses. The exact peer contract will move to it once it is published to npm.
+- You need Node.js `22.19.x` or `24.x`.
+- A `DEEPSEEK_API_KEY` must be available through the Harness credential service or the launch environment.
+- You need a preset that can already search. The plugin does not give search capability to the shipped `minimal` preset.
+- The plugin can share one `web` profile with the `dsh-web` ecosystem bundle (`@linxin666/dsh-web-all`) and `dsh-deepseek-girl-pet`. The combined five-layer patch was composed with the official `@deepseek-ai/cordis-plugin-include` and produced 169 entries with no duplicate ids, no missing rows and no warnings. No ecosystem package registers `web_search` or mounts `time-context`, and no HTTP routes collide.
+- CI covers Ubuntu and Windows. macOS is not currently part of the support contract.
 
-See [the compatibility contract](docs/COMPATIBILITY.md) before changing Harness, Cordis, Node, or package-manager versions.
+Read [the compatibility contract](docs/COMPATIBILITY.md) before you change the Harness, Cordis, Node, or package-manager version.
 
 ## Install in one minute
 
@@ -49,13 +49,13 @@ dsh --profile web --dump-config
 dsh web
 ```
 
-Equivalent one-line PowerShell command:
+The same steps as a single PowerShell line:
 
 ```powershell
 dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
 ```
 
-The release commits prebuilt `lib/` output and has no install-time build script, so a pinned Git install does not execute this repository's development toolchain on the user's machine.
+The release commits prebuilt `lib/` output and has no install-time build script. A pinned Git install therefore does not run this repository's development toolchain on your machine.
 
 ### Experimental five-tool snapshot
 
@@ -65,9 +65,9 @@ dsh --profile web --dump-config
 dsh web
 ```
 
-Use this only for development and evaluation. Do not replace the commit with the moving `main` branch in a reproducible test.
+Use this snapshot only for development and evaluation. In a reproducible test, do not replace the commit with the moving `main` branch.
 
-If the deployment already mounts Discussion #344's `time-context` row, set `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1` before starting Harness to avoid duplicate clock injectors.
+If your deployment already mounts the `time-context` row from Discussion #344, set `DSH_VERIFIED_SEARCH_DISABLE_TIME_CONTEXT=1` before starting Harness so that two clock injectors do not run.
 
 ### Roll back
 
@@ -78,11 +78,11 @@ dsh web
 
 ## Minimal quickstart
 
-Ask a search-capable agent a bounded, absolute-date question, for example:
+Ask a search-capable agent a narrow question with an absolute date, for example:
 
 > Find DeepSeek's current flagship API model as of 2026-08-14. Use only `api-docs.deepseek.com`. If the retained sources do not contain an answer-bearing excerpt, report the claim as unresolved instead of filling it from memory.
 
-The corresponding model-facing `verified_search` arguments are:
+The matching model-facing `verified_search` arguments are:
 
 ```json
 {
@@ -91,15 +91,15 @@ The corresponding model-facing `verified_search` arguments are:
 }
 ```
 
-Expected behavior:
+You should see the following behavior:
 
-- the native provider allowlist is sent upstream;
-- returned structured sources are post-filtered locally by exact hostname or subdomain;
-- credential-bearing URLs and sensitive or tracking URL components are rejected or removed before session-visible results are assembled;
-- a title or URL without a retained citation excerpt is not promoted to verified evidence;
-- an evidence gap remains visible rather than being replaced with an older or memorized answer.
+- The native provider allowlist is sent upstream.
+- The structured sources that come back are filtered again locally, by exact hostname or subdomain.
+- URLs that carry credentials, and URL parts that are sensitive or used for tracking, are rejected or removed before results become visible in the session.
+- A title or URL without a retained citation excerpt is not promoted to verified evidence.
+- An evidence gap stays visible and is not filled with an older or memorized answer.
 
-Run a separate unrestricted query when independent comparison sources are also required. The allowlist is a postcondition over returned structured-source hostnames, not a network-egress or privacy boundary.
+If you also need independent sources for comparison, run a separate query without a domain restriction. The allowlist is a condition on the hostnames of the structured sources that come back. It is not a network-egress or privacy boundary.
 
 ## Choose the right tool
 
@@ -111,7 +111,7 @@ Run a separate unrestricted query when independent comparison sources are also r
 | `verified_json_numeric_extrema` | Exact numeric maximum or minimum from JSON | Source-lexeme comparison without IEEE-754 loss and all final ties |
 | `verified_json_projection` | Every strict matching JSON row in source order | Bounded parent/nested projection with auditable pointer repairs and no inferred ordering |
 
-Only `verified_search` belongs to the stable `v0.1.1` release. The other four tools are experimental in the pinned `0.3.0-experiment.0` snapshot.
+Only `verified_search` is part of the stable `v0.1.1` release. The other four tools are experimental and exist only in the pinned `0.3.0-experiment.0` snapshot.
 
 ### Composite research example
 
@@ -139,21 +139,21 @@ Only `verified_search` belongs to the stable `v0.1.1` release. The other four to
 }
 ```
 
-`evidence_must_include` is a normalized substring postcondition, not a semantic entailment judge. Do not put the unknown answer itself into a required phrase merely to confirm the model's guess.
+`evidence_must_include` checks that a normalized substring appears in the evidence. It does not judge whether the evidence semantically supports the claim. Do not put the answer you are looking for into a required phrase just to confirm the model's guess.
 
 ## Failure behavior
 
-The plugin is designed to fail closed or stay explicitly unresolved.
+When the plugin cannot meet its conditions, it fails visibly or leaves the claim explicitly unresolved.
 
-- Invalid hostname allowlists, credential-bearing URLs, unsafe redirects, non-public resolved addresses, unsupported media, malformed charset declarations, invalid UTF-8, and resource-limit violations fail visibly.
-- Structured JSON operations reject invalid JSON, duplicate keys, excessive nesting, invalid pointers, missing fields, unsupported numeric projection, row/tie/output limits, and unavailable exact number lexemes.
-- Discovery may skip known binary paths. An explicitly supplied unsupported binary seed fails visibly instead of being silently reinterpreted.
-- Provider or fetch timeouts abort bounded work and preserve the evidence gap.
-- `allClaimsCovered`, `complete: true`, or `truncated: false` describe the declared bounded operation only; they do not prove source freshness, semantic entailment, publisher authenticity, feed completeness, or exhausted pagination.
+- Invalid hostname allowlists, URLs that carry credentials, unsafe redirects, addresses that resolve to non-public networks, unsupported media, malformed charset declarations, invalid UTF-8, and resource-limit violations all produce a visible failure.
+- The structured JSON operations reject invalid JSON, duplicate keys, excessive nesting, invalid pointers, missing fields, unsupported numeric projection, row, tie or output limits that are exceeded, and runtimes where the exact number lexeme is unavailable.
+- Discovery may skip paths that are known to be binary. A binary seed that you supply explicitly and that is not supported fails visibly instead of being quietly reinterpreted.
+- A provider or fetch timeout stops the bounded work and keeps the evidence gap.
+- `allClaimsCovered`, `complete: true`, and `truncated: false` describe only the declared bounded operation. They do not prove that a source is fresh, that it supports the claim, that the publisher is authentic, that a feed is complete, or that pagination is exhausted.
 
 ## Trust and security boundary
 
-The plugin can enforce that returned structured sources match an explicit hostname allowlist after local filtering. The experimental full-page reader additionally restricts retrieval to bounded public HTTPS targets with DNS/IP validation, pinned transport, redirect checks, supported text/JSON media types, charset validation, and byte/time limits.
+The plugin can enforce that the structured sources it returns, after local filtering, match an explicit hostname allowlist. The experimental full-page reader goes further. It retrieves only bounded public HTTPS targets and applies DNS and IP validation, pinned transport, redirect checks, a check for supported text and JSON media types, charset validation, and byte and time limits.
 
 It does **not** prove that:
 
@@ -165,27 +165,27 @@ It does **not** prove that:
 - an API response is authentic, complete, unpaginated, correctly ordered, or factually correct;
 - text from a public page is safe to follow as instructions.
 
-Search queries are durable Harness session data. Never put secrets, signed URLs, or private data in a query. See [SECURITY.md](SECURITY.md) for private reporting and the detailed threat boundary.
+Search queries are stored durably as Harness session data. Never put secrets, signed URLs, or private data in a query. [SECURITY.md](SECURITY.md) explains private reporting and the full threat boundary.
 
 ## Verification snapshot
 
-The pinned experimental snapshot records:
+The pinned experimental snapshot records the following:
 
-- source commit: `c29b531a6c2e52200d454aa9ded42214ba8c0014`;
-- push CI: passed on Ubuntu and Windows across Node `22.19.x` and `24.x`;
-- HonestCI baseline: **250 tests**, 0 failures, 0 errors, 0 skipped;
-- frozen offline corpus: **42/42 cases**;
-- registered offline result digest: `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`;
-- committed `lib/` and package-content reproducibility checks;
-- external independent validation: **absent**.
+- The source commit is `c29b531a6c2e52200d454aa9ded42214ba8c0014`.
+- Push CI passed on Ubuntu and Windows across Node `22.19.x` and `24.x`.
+- The HonestCI baseline is **250 tests**, with 0 failures, 0 errors and 0 skipped.
+- The frozen offline corpus passed **42/42 cases**.
+- The registered offline result digest is `sha256:3002001da02d0b8501bcc97ee867109f1bfbf0e1a227d87845db81da658ea5c0`.
+- The committed `lib/` output and the package contents passed reproducibility checks.
+- No external party has independently validated the snapshot.
 
-Machine-readable lifecycle, runtime, capability, and architecture facts live in [`capabilities.json`](capabilities.json) and [`architecture.json`](architecture.json). The evaluation method is documented in [docs/OFFLINE_EVALUATION.md](docs/OFFLINE_EVALUATION.md), [docs/PROPERTY_TESTING.md](docs/PROPERTY_TESTING.md), and [docs/HONEST_CI_DOGFOOD.md](docs/HONEST_CI_DOGFOOD.md).
+Machine-readable facts about lifecycle, runtime, capabilities and architecture live in [`capabilities.json`](capabilities.json) and [`architecture.json`](architecture.json). The evaluation method is described in [docs/OFFLINE_EVALUATION.md](docs/OFFLINE_EVALUATION.md), [docs/PROPERTY_TESTING.md](docs/PROPERTY_TESTING.md), and [docs/HONEST_CI_DOGFOOD.md](docs/HONEST_CI_DOGFOOD.md).
 
 ## Observed evaluation
 
 ![Observed completion improvement on two difficult official-source tasks](docs/assets/benchmark.svg)
 
-Two frozen-ledger live tasks were observed under a 600-second outer cap:
+Two live tasks with frozen answer ledgers were each run once, under a 600-second outer time limit:
 
 | Task | Before the fixes | Experimental workflow | Terminal time |
 | --- | ---: | ---: | ---: |
@@ -193,11 +193,11 @@ Two frozen-ledger live tasks were observed under a 600-second outer cap:
 | EU AI Act amended timeline and GPAI transition dates | 0/8 | **6/8** | 307 s |
 | **Combined** | **0/16** | **14/16 (87.5%)** | — |
 
-All 14 answered requested fields had retained official-source evidence; the other two stayed unresolved. These are single observed runs, not a standardized benchmark, statistical estimate, latency target, or release guarantee. Both successful terminal runs exceeded 240 seconds, so timeout and latency work remains important.
+Every one of the 14 answered fields had retained evidence from an official source, and the other two stayed unresolved. These are single observed runs. They are not a standardized benchmark, a statistical estimate, a latency target or a release guarantee. Both successful runs took longer than 240 seconds, so timeout and latency work is still important.
 
 ## Configuration
 
-The bundle can read `DEEPSEEK_API_KEY` from the Harness credential service or launch environment. Optional configuration fields include:
+The bundle can read `DEEPSEEK_API_KEY` from the Harness credential service or the launch environment. These optional configuration fields are available:
 
 | Area | Fields |
 | --- | --- |
@@ -205,7 +205,7 @@ The bundle can read `DEEPSEEK_API_KEY` from the Harness credential service or la
 | Search limits | `maxTokens`, `maxUses`, `maxResults`, `searchTimeoutMs` |
 | Experimental research | `researchTimeoutMs`, `researchMaxResults` |
 
-`researchMaxResults` defaults to 24, is constrained to 4–32, and must be at least the declared claim count for the call. Treat configuration changes as compatibility and resource-boundary changes, not merely tuning.
+`researchMaxResults` defaults to 24, must be between 4 and 32, and must be at least the number of claims declared in the call. Treat a configuration change as a change to compatibility and resource limits, not just tuning.
 
 ## Development and full verification
 
@@ -220,7 +220,7 @@ git diff --check
 git diff --exit-code -- lib
 ```
 
-The second build must not create a new `lib/` diff. A changed frozen offline digest is a behavior-change signal; do not update the expected digest merely to make CI green.
+A second build must not produce a new `lib/` diff. If the frozen offline digest changes, the behavior has probably changed. Do not update the expected digest just to make CI green.
 
 ## Documentation
 
@@ -236,12 +236,12 @@ The second build must not create a new `lib/` diff. A changed frozen offline dig
 
 ## Relationship to the upstream core fix
 
-This repository is a deployable compatibility layer. The provider-neutral Harness core change remains [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371). If the official project ships equivalent bounded capabilities, this plugin can move to an additional verification mode or retire with a documented migration path.
+This repository is a compatibility layer that you can deploy today. The provider-neutral change to the Harness core is still [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371). If the official project ships equivalent bounded capabilities, this plugin can become an additional verification mode or be retired with a documented migration path.
 
 ## Security reporting
 
-Use this repository's private GitHub security-advisory interface for a suspected credential leak, allowlist bypass, or unsafe page-fetch path. Do not paste API keys, signed URLs, private queries, private excerpts, or raw session logs into a public issue.
+To report a suspected credential leak, allowlist bypass, or unsafe page-fetch path, use this repository's private GitHub security-advisory form. Do not paste API keys, signed URLs, private queries, private excerpts, or raw session logs into a public issue.
 
 ## License
 
-MIT
+This project is released under the MIT License.
