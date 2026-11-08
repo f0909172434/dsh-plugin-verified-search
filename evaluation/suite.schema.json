@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/f0909172434/dsh-plugin-verified-search/blob/main/evaluation/suite.schema.json",
+  "$id": "https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/blob/main/evaluation/suite.schema.json",
   "title": "Verified Search Offline Evaluation Suite",
   "$defs": {
     "jsonValue": {

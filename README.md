@@ -4,9 +4,9 @@
 
 # dsh-plugin-verified-search
 
-[![CI](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/f0909172434/dsh-plugin-verified-search?display_name=tag)](https://github.com/f0909172434/dsh-plugin-verified-search/releases)
-[![License](https://img.shields.io/github/license/f0909172434/dsh-plugin-verified-search)](LICENSE)
+[![CI](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Chih-Kai-Wang/dsh-plugin-verified-search?display_name=tag)](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/releases)
+[![License](https://img.shields.io/github/license/Chih-Kai-Wang/dsh-plugin-verified-search)](LICENSE)
 
 [English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
@@ -44,7 +44,7 @@ Read [the compatibility contract](docs/COMPATIBILITY.md) before you change the H
 ### Stable `verified_search`
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#v0.1.1
 dsh --profile web --dump-config
 dsh web
 ```
@@ -52,7 +52,7 @@ dsh web
 The same steps as a single PowerShell line:
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
 ```
 
 The release commits prebuilt `lib/` output and has no install-time build script. A pinned Git install therefore does not run this repository's development toolchain on your machine.
@@ -60,7 +60,7 @@ The release commits prebuilt `lib/` output and has no install-time build script.
 ### Experimental five-tool snapshot
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
 dsh --profile web --dump-config
 dsh web
 ```
@@ -236,7 +236,7 @@ A second build must not produce a new `lib/` diff. If the frozen offline digest 
 
 ## Relationship to the upstream core fix
 
-This repository is a compatibility layer that you can deploy today. The provider-neutral change to the Harness core is still [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371). If the official project ships equivalent bounded capabilities, this plugin can become an additional verification mode or be retired with a documented migration path.
+This repository is a compatibility layer that you can deploy today. The provider-neutral change to the Harness core is still [`ce4d0455c`](https://github.com/Chih-Kai-Wang/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371). If the official project ships equivalent bounded capabilities, this plugin can become an additional verification mode or be retired with a documented migration path.
 
 ## Security reporting
 

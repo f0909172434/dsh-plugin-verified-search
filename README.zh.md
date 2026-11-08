@@ -4,9 +4,9 @@
 
 # dsh-plugin-verified-search
 
-[![CI](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/f0909172434/dsh-plugin-verified-search/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/f0909172434/dsh-plugin-verified-search?display_name=tag)](https://github.com/f0909172434/dsh-plugin-verified-search/releases)
-[![License](https://img.shields.io/github/license/f0909172434/dsh-plugin-verified-search)](LICENSE)
+[![CI](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/actions/workflows/ci.yml/badge.svg)](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Chih-Kai-Wang/dsh-plugin-verified-search?display_name=tag)](https://github.com/Chih-Kai-Wang/dsh-plugin-verified-search/releases)
+[![License](https://img.shields.io/github/license/Chih-Kai-Wang/dsh-plugin-verified-search)](LICENSE)
 
 [English](README.md) · [繁體中文](README.zh.md) · [简体中文](README.zh-CN.md)
 
@@ -44,7 +44,7 @@
 ### 穩定版 `verified_search`
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#v0.1.1
 dsh --profile web --dump-config
 dsh web
 ```
@@ -52,7 +52,7 @@ dsh web
 同樣的步驟寫成一行 PowerShell 指令：
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#v0.1.1; dsh --profile web --dump-config; dsh web
 ```
 
 Release 已經提交預先建置好的 `lib/`，也沒有 install-time build script。因此用固定的 Git ref 安裝時，不會在你的電腦上執行此 repository 的開發工具鏈。
@@ -60,7 +60,7 @@ Release 已經提交預先建置好的 `lib/`，也沒有 install-time build scr
 ### 五工具實驗快照
 
 ```powershell
-dsh plugin --profile web add github:f0909172434/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
+dsh plugin --profile web add github:Chih-Kai-Wang/dsh-plugin-verified-search#c29b531a6c2e52200d454aa9ded42214ba8c0014
 dsh --profile web --dump-config
 dsh web
 ```
@@ -236,7 +236,7 @@ git diff --exit-code -- lib
 
 ## 與上游核心修復的關係
 
-此 repository 是現在就能部署的相容層。Provider-neutral 的 Harness 核心修改仍然是 [`ce4d0455c`](https://github.com/f0909172434/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。如果官方專案推出等價的有界功能，此外掛可以轉為額外的驗證模式，或依照有文件的遷移路徑退役。
+此 repository 是現在就能部署的相容層。Provider-neutral 的 Harness 核心修改仍然是 [`ce4d0455c`](https://github.com/Chih-Kai-Wang/deepseek-harness/commit/ce4d0455c637e5ba91fbb7b3a88725e7ec097371)。如果官方專案推出等價的有界功能，此外掛可以轉為額外的驗證模式，或依照有文件的遷移路徑退役。
 
 ## 安全回報
 
